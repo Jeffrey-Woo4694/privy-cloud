@@ -69,6 +69,7 @@ privy-cloud/
 │   ├── index.html
 │   └── src/
 │       ├── main.tsx
+│       ├── vite-env.d.ts            # vite/client types (import.meta.env)
 │       ├── App.tsx                  # tab bar + routing + theme
 │       ├── styles/theme.css         # design tokens (dark/light)
 │       ├── theme.tsx                # ThemeProvider, useTheme, toggle
@@ -713,12 +714,12 @@ let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 describe('permissions', () => {
-  it('ensurePermissions creates owner default and is idempotent', () => {
+  it('ensurePermissions creates owner default and is idempotent', async () => {
     root = mkdtempSync(join(tmpdir(), 'privy-'));
     ensurePermissions(root);
     expect(existsSync(permissionsPath(root))).toBe(true);
     ensurePermissions(root);
-    expect(loadPermissions(root).owner).toBe('owner');
+    expect((await loadPermissions(root)).owner).toBe('owner');
   });
 
   it('checkPermission always allows in v1', async () => {
@@ -1242,7 +1243,7 @@ git commit -m "feat: REST API — items, file get/save, send text/file/folder, c
 
 **Files:**
 - Create: `server/src/watcher.ts`, `server/test/watcher.test.ts`
-- Modify: `server/src/api/socket.ts`, `server/src/index.ts`, `server/test/api.test.ts`
+- Modify: `server/src/api/socket.ts`, `server/src/index.ts` (api.test.ts needs no change — `app.close()` already stops the watcher via the onClose hook)
 
 **Interfaces:**
 - Consumes: `ApiContext`/`ServerEvent` from `api/routes.ts`.
@@ -1295,7 +1296,7 @@ Expected: FAIL — `createWatcher` undefined.
 - [ ] **Step 3: Write `server/src/watcher.ts`**
 
 ```ts
-import chokidar, { type FSWatcher } from 'chokidar';
+import { watch, type FSWatcher } from 'chokidar';
 import { relative } from 'node:path';
 import type { ServerEvent } from './api/routes.js';
 import { listItems, privyBase } from './directory.js';
@@ -1314,7 +1315,7 @@ export async function createWatcher(root: string, onChange: (e: ServerEvent) => 
     timer = setTimeout(() => onChange(e), 120);
   };
 
-  const w: FSWatcher = chokidar.watch(root, {
+  const w: FSWatcher = watch(root, {
     ignored: (p) => p.includes('.privy') || p.includes('.git'),
     ignoreInitial: false,
     awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 },
@@ -1464,7 +1465,7 @@ git commit -m "feat: serve web build from backend, add walkthrough script"
 ### Task 10: Web scaffold + design tokens
 
 **Files:**
-- Create: `web/package.json`, `web/tsconfig.json`, `web/vite.config.ts`, `web/vitest.config.ts`, `web/index.html`, `web/src/main.tsx`, `web/src/styles/theme.css`
+- Create: `web/package.json`, `web/tsconfig.json`, `web/vite.config.ts`, `web/vitest.config.ts`, `web/index.html`, `web/src/main.tsx`, `web/src/vite-env.d.ts`, `web/src/styles/theme.css`
 - Modify: root `package.json` (nothing — already workspaces).
 
 **Interfaces:**
@@ -1589,7 +1590,11 @@ button { font: inherit; cursor: pointer; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--border); color: var(--text); padding: 10px 16px; border-radius: 8px; z-index: 10; }
 ```
 
-- [ ] **Step 7: Write `web/src/main.tsx`**
+- [ ] **Step 7: Write `web/src/vite-env.d.ts` and `web/src/main.tsx`**
+
+```ts
+/// <reference types="vite/client" />
+```
 
 ```tsx
 import React from 'react';
@@ -1726,9 +1731,11 @@ export const api = {
     const fd = new FormData();
     fd.append('folderName', folderName);
     for (const file of files) {
-      const rel = file.webkitRelativePath || file.name;
+      // webkitRelativePath is "folder/sub/file.ext"; the backend joins relativePath under Folders/<folderName>,
+      // so strip the leading segment (the folder name) so the structure is preserved without doubling it.
+      const rel = (file.webkitRelativePath || file.name).split('/').slice(1).join('/') || file.name;
       fd.append('relativePath', rel);
-      fd.append('file', file, rel.split('/').pop() ?? file.name);
+      fd.append('file', file, file.name);
     }
     const r = await req<{ entry: ChatEntry }>('/api/send/folder', { method: 'POST', body: fd });
     return r.entry;
@@ -2362,6 +2369,14 @@ Expected: PASS. `App.test.tsx` now renders the real Privy Cloud tab — it must 
 
 ```ts
 globalThis.fetch ??= (() => Promise.reject(new Error('fetch not available in test'))) as typeof fetch;
+// jsdom has no WebSocket; give PrivyCloudTab's live-update connect() a minimal fake so App tests can mount it.
+class MockWebSocket {
+  static readonly OPEN = 1; readonly OPEN = 1; readyState = 1;
+  onopen: (() => void) | null = null; onclose: (() => void) | null = null;
+  onmessage: ((e: { data: string }) => void) | null = null;
+  close() { this.onclose?.(); }
+}
+globalThis.WebSocket ??= MockWebSocket as unknown as typeof WebSocket;
 ```
 
 - [ ] **Step 3: Run the whole suite (server + web)**
