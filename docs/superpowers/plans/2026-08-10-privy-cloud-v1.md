@@ -263,7 +263,7 @@ git commit -m "chore: scaffold npm workspace and @privy/shared types"
 
 **Interfaces:**
 - Consumes: `@privy/shared` (none yet).
-- Produces: `loadConfig(): Promise<{ root: string; owner: string }>`; `setRoot(path: string): Promise<string>` (writes `~/.privy-cloud/config.json`, returns the absolute normalized path); `ensureHomeConfig(): Promise<void>`. Fastify app factory `buildApp()` returning a Fastify instance with `GET /api/health` → `{ ok: true }`.
+- Produces: `loadConfig(): Promise<{ root: string; owner: string }>`; `setRoot(path: string): Promise<string>` (writes `~/.privy-cloud/config.json`, returns the absolute normalized path); `ensureHomeConfig(): void` (sync — per Step 6). Fastify app factory `buildApp()` returning a Fastify instance with `GET /api/health` → `{ ok: true }`.
 
 - [ ] **Step 1: Write `server/package.json`**
 
