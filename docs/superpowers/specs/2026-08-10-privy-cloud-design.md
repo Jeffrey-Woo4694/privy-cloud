@@ -48,6 +48,7 @@ Tauri window → loads frontend → frontend talks to backend on localhost → b
     ├── Documents/
     ├── Markdown/          # text messages & chat text → timestamped .md files
     ├── Folders/           # whole directories sent via chat
+    ├── Other/             # catch-all for anything that doesn't match a kind
     └── .privy/            # hidden app data (excluded from UI)
         ├── chat-log.jsonl # one line per send: time, type, saved path, kind
         └── permissions.json # owner entry; multi-user hooks (single-user today)
@@ -80,7 +81,7 @@ File extension → kind: **Images / Videos / Slides / Documents / Markdown / Fol
 
 ### 5.2 Privy Cloud tab (approved layout)
 - **Default view** — sharing grid on the **left**, chat panel on the **right** (~30% width).
-- **Kind filter chips** above the grid: All | Images | Videos | Docs | Slides | Markdown (Folders).
+- **Kind filter chips** above the grid: All | Images | Videos | Docs | Slides | Markdown | Folders | Other.
 - **Click any file** → the split collapses and the file opens **full-width** with a "← Back to sharing" control. Markdown/text is editable inline; images/videos/slides/PDFs render as view-only viewers.
 - **Chat panel** — timeline of sends (each entry links to its stored file, or shows the text), plus the input bar: message text + attach file 📎 + attach folder 📁 + send.
 
