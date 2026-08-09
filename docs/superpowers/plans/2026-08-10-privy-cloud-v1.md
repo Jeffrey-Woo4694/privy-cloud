@@ -432,7 +432,7 @@ git commit -m "feat: backend scaffold with config module and health route"
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRootStructure, resolveSafe, listItems, privyBase } from '../src/directory.js';
@@ -454,10 +454,10 @@ describe('directory', () => {
     root = mkdtempSync(join(tmpdir(), 'privy-root-'));
     await initRootStructure(root);
     for (const d of ['Hermes Agent', 'Coding Project', 'Privy Cloud']) {
-      expect(() => mkdirSync(join(root, d))).not.toThrow();
+      expect(existsSync(join(root, d))).toBe(true);
     }
     for (const sub of ['Images','Videos','Slides','Documents','Markdown','Folders','Other']) {
-      expect(() => mkdirSync(join(root, 'Privy Cloud', sub))).not.toThrow();
+      expect(existsSync(join(root, 'Privy Cloud', sub))).toBe(true);
     }
   });
 
