@@ -1,0 +1,13 @@
+{
+  "name": "privy-cloud",
+  "private": true,
+  "type": "module",
+  "workspaces": ["shared", "server", "web", "desktop"],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web\"",
+    "test": "npm run test -w server && npm run test -w web",
+    "build": "npm run build -w shared && npm run build -w server && npm run build -w web",
+    "app": "npm run tauri -w desktop dev"
+  },
+  "devDependencies": { "concurrently": "^9.1.0", "typescript": "^5.5.0" }
+}
