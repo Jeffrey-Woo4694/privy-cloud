@@ -1,0 +1,31 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { loadConfig, setRoot } from '../src/config.js';
+
+const HOME = process.env.HOME ?? '';
+let dirs: string[] = [];
+const fakeHome = () => { const d = mkdtempSync(join(tmpdir(), 'privy-home-')); dirs.push(d); return d; };
+
+afterEach(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); dirs = []; });
+
+describe('config', () => {
+  it('loadConfig defaults to ~/PrivyCloud when no config file exists', async () => {
+    const home = fakeHome();
+    process.env.HOME = home;
+    process.env.PRIVY_ROOT = '';
+    const cfg = await loadConfig();
+    expect(cfg.root).toBe(join(home, 'PrivyCloud'));
+  });
+
+  it('setRoot persists the root and returns the normalized absolute path', async () => {
+    const home = fakeHome(); process.env.HOME = home; process.env.PRIVY_ROOT = '';
+    const target = join(tmpdir(), 'my-data-dir');
+    const got = await setRoot(target);
+    expect(got).toBe(target);
+    const cfgFile = join(home, '.privy-cloud', 'config.json');
+    expect(existsSync(cfgFile)).toBe(true);
+    expect(JSON.parse(readFileSync(cfgFile, 'utf8')).root).toBe(target);
+  });
+});
