@@ -648,8 +648,8 @@ Expected: FAIL — `appendEntry`/`readEntries` undefined.
 
 ```ts
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { appendFileSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import type { ChatEntry } from '@privy/shared';
 
 export function chatLogPath(root: string): string {
@@ -657,7 +657,11 @@ export function chatLogPath(root: string): string {
 }
 
 export function createChatLog(root: string): void {
-  if (!existsSync(chatLogPath(root))) writeFileSync(chatLogPath(root), '');
+  const file = chatLogPath(root);
+  if (!existsSync(file)) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, '');
+  }
 }
 
 export async function appendEntry(root: string, entry: Omit<ChatEntry, 'id' | 'ts'>): Promise<ChatEntry> {
