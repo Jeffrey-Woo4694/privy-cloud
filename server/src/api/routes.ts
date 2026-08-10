@@ -1,4 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
@@ -78,7 +79,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const abs = privyResolve(ctx, rel);
     if (!abs) return reply.code(400).send({ error: 'unsafe path' });
     const name = rel.split('/').pop() ?? '';
-    return reply.type(mimeFor(name)).send(await readFile(abs));
+    return reply.type(mimeFor(name)).send(createReadStream(abs));
   });
 
   app.put('/api/file', async (req, reply) => {

@@ -29,8 +29,12 @@ describe('api', () => {
     const items = await app.inject({ method: 'GET', url: '/api/items' });
     expect(items.json().map((i: { path: string }) => i.path)).toContain('Markdown/note.md');
 
+    mkdirSync(join(root, 'Privy Cloud', 'Images'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Images', 'pic.png'), 'x');
     const img = await app.inject({ method: 'GET', url: '/api/items?kind=image' });
+    expect(img.json().map((i: { path: string }) => i.path)).toContain('Images/pic.png');
     expect(img.json().every((i: { kind: string }) => i.kind === 'image')).toBe(true);
+    expect(img.json().map((i: { path: string }) => i.path)).not.toContain('Markdown/note.md');
     await app.close();
   });
 
