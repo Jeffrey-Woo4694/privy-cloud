@@ -1438,7 +1438,7 @@ Expected: dependency added.
 ```ts
 import { existsSync } from 'node:fs';
 // inside buildApp, before registering routes:
-const webDist = process.env.PRIVY_WEB_DIST ?? new URL('../../../web/dist', import.meta.url).pathname;
+const webDist = process.env.PRIVY_WEB_DIST ?? new URL('../../web/dist', import.meta.url).pathname;
 if (existsSync(webDist)) {
   await app.register((await import('@fastify/static')).default, { root: webDist, prefix: '/' });
   app.setNotFoundHandler(async (req, reply) => {
@@ -1465,10 +1465,38 @@ kill %1
 ```
 Expected: meta returns the root; send text returns an entry; items shows `Markdown/hello-from-curl-<ts>.md`; chat returns the entry.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Add a focused test for the serving branch**
+
+Modify `server/test/api.test.ts` — inside the existing `describe('api', ...)` block, add this test (uses only imports already present in the file: `mkdtempSync`, `writeFileSync`, `rmSync`, `tmpdir`, `join`):
+
+```ts
+it('serves the web build from PRIVY_WEB_DIST and keeps /api 404s as JSON', async () => {
+  const webDist = mkdtempSync(join(tmpdir(), 'privy-web-'));
+  writeFileSync(join(webDist, 'index.html'), '<!doctype html><title>privy</title>');
+  const prev = process.env.PRIVY_WEB_DIST;
+  process.env.PRIVY_WEB_DIST = webDist;
+  try {
+    const app = await boot();
+    const page = await app.inject({ method: 'GET', url: '/' });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('<title>privy</title>');
+    const missing = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toEqual({ error: 'not found' });
+    await app.close();
+  } finally {
+    if (prev === undefined) delete process.env.PRIVY_WEB_DIST; else process.env.PRIVY_WEB_DIST = prev;
+    rmSync(webDist, { recursive: true, force: true });
+  }
+});
+```
+
+Expected: PASS — confirms `GET /` serves `index.html` from the fixture, an unmatched `/api/*` returns JSON `{ error: 'not found' }` (static's `callNotFound()` delegates to the app's notFoundHandler), and the env var is restored.
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add server/src/index.ts package.json server/package.json package-lock.json
+git add server/src/index.ts server/test/api.test.ts package.json server/package.json package-lock.json
 git commit -m "feat: serve web build from backend, add walkthrough script"
 ```
 
