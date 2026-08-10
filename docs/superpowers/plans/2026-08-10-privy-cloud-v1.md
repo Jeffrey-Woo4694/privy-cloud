@@ -2455,15 +2455,26 @@ class MockWebSocket {
 globalThis.WebSocket ??= MockWebSocket as unknown as typeof WebSocket;
 ```
 
-- [ ] **Step 3: Run the whole suite (server + web)**
+- [ ] **Step 3: Re-add the web build to the walkthrough script**
+
+Task 9's Step 3 promised to re-add `&& npm run build -w web` to the root `package.json` walkthrough script "in Task 16 once `web/dist` can exist" (web/dist now exists since Task 10). Edit the root `package.json` `scripts.walkthrough` line to insert the web build before the server launch:
+
+```bash
+# before: "npm run build -w shared && npm run build -w server && PRIVY_ROOT=/tmp/privy-walkthrough node server/dist/index.js"
+# after:  "npm run build -w shared && npm run build -w server && npm run build -w web && PRIVY_ROOT=/tmp/privy-walkthrough node server/dist/index.js"
+```
+
+Do not reformat the rest of `package.json` — replace only the `walkthrough` line.
+
+- [ ] **Step 4: Run the whole suite (server + web)**
 
 Run: `npm test`
 Expected: all backend + frontend tests PASS.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add web/src/pages/PrivyCloudTab.tsx web/src/__tests__/setup.ts
+git add web/src/pages/PrivyCloudTab.tsx web/src/__tests__/setup.ts package.json
 git commit -m "feat: wire Privy Cloud tab — grid, chat, live updates, full-width viewer"
 ```
 
