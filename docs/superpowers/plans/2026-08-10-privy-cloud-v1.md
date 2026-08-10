@@ -2028,7 +2028,7 @@ git commit -m "feat: app shell with tab bar, placeholder pages, and theme toggle
 
 **Interfaces:**
 - Consumes: `KINDS`/`FileItem`/`Kind` from `@privy/shared`.
-- Produces: `<KindFilter value: Kind | 'all' onChange(k: Kind | 'all') />` (renders "All" + one chip per kind from `KINDS`); `<SharingGrid items: FileItem[] selectedPath: string | null onSelect(item: FileItem) />` (grid of tiles: icon per kind, name, meta "size · label"; click calls `onSelect`; folder tiles display `📁` and `folder` meta; shows an empty-state message when no items).
+- Produces: `<KindFilter value: Kind | 'all' onChange(k: Kind | 'all') />` (renders "All" + one chip per kind from `KINDS`); `<SharingGrid items: FileItem[] onSelect(item: FileItem) />` (grid of tiles: icon per kind, name, meta "size · label"; click calls `onSelect`; folder tiles display `📁` and `folder` meta; shows an empty-state message when no items).
 
 - [ ] **Step 1: Write `web/src/components/KindFilter.tsx`**
 
