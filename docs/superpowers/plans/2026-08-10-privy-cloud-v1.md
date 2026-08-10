@@ -991,8 +991,12 @@ describe('api', () => {
     const items = await app.inject({ method: 'GET', url: '/api/items' });
     expect(items.json().map((i: { path: string }) => i.path)).toContain('Markdown/note.md');
 
+    mkdirSync(join(root, 'Privy Cloud', 'Images'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Images', 'pic.png'), 'x');
     const img = await app.inject({ method: 'GET', url: '/api/items?kind=image' });
+    expect(img.json().map((i: { path: string }) => i.path)).toContain('Images/pic.png');
     expect(img.json().every((i: { kind: string }) => i.kind === 'image')).toBe(true);
+    expect(img.json().map((i: { path: string }) => i.path)).not.toContain('Markdown/note.md');
     await app.close();
   });
 
@@ -1040,7 +1044,8 @@ Expected: FAIL — `buildApp({ root })` signature mismatch / routes missing.
 - [ ] **Step 3: Write `server/src/api/routes.ts`**
 
 ```ts
-import { readFile, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
@@ -1120,7 +1125,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const abs = privyResolve(ctx, rel);
     if (!abs) return reply.code(400).send({ error: 'unsafe path' });
     const name = rel.split('/').pop() ?? '';
-    return reply.type(mimeFor(name)).send(await readFile(abs));
+    return reply.type(mimeFor(name)).send(createReadStream(abs));
   });
 
   app.put('/api/file', async (req, reply) => {
