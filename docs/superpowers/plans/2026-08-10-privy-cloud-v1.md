@@ -709,7 +709,7 @@ git commit -m "feat: append-only JSONL chat log with newest-first reads"
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensurePermissions, loadPermissions, checkPermission, permissionsPath } from '../src/permissions.js';
@@ -722,8 +722,10 @@ describe('permissions', () => {
     root = mkdtempSync(join(tmpdir(), 'privy-'));
     ensurePermissions(root);
     expect(existsSync(permissionsPath(root))).toBe(true);
+    // existing file must never be overwritten
+    writeFileSync(permissionsPath(root), JSON.stringify({ owner: 'someone-else', entries: [] }));
     ensurePermissions(root);
-    expect((await loadPermissions(root)).owner).toBe('owner');
+    expect((await loadPermissions(root)).owner).toBe('someone-else');
   });
 
   it('checkPermission always allows in v1', async () => {
