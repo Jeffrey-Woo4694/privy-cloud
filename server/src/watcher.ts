@@ -1,5 +1,5 @@
 import { watch, type FSWatcher } from 'chokidar';
-import { relative } from 'node:path';
+import { relative, basename } from 'node:path';
 import type { ServerEvent } from './api/routes.js';
 import { listItems, privyBase } from './directory.js';
 
@@ -18,7 +18,7 @@ export async function createWatcher(root: string, onChange: (e: ServerEvent) => 
   };
 
   const w: FSWatcher = watch(root, {
-    ignored: (p) => p.includes('.privy') || p.includes('.git'),
+    ignored: (p) => basename(p).startsWith('.'), // any hidden name (spec: "any name starting with .")
     ignoreInitial: false,
     awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 },
   });
