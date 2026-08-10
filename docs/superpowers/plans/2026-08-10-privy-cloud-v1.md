@@ -2525,7 +2525,13 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "blocking"] }
 serde_json = "1"
+
+[lib]
+name = "privy_cloud_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
 ```
+
+`main.rs` calls `privy_cloud_desktop_lib::run()`; the `[lib] name` above is what makes that crate name resolve (the package name `privy-cloud-desktop` would otherwise produce the crate name `privy_cloud_desktop`, and `main.rs` would fail to compile). This is the standard Tauri 2 template lib section.
 
 - [ ] **Step 4: Write `desktop/src-tauri/build.rs`**
 
@@ -2542,15 +2548,19 @@ fn main() { tauri_build::build() }
   "version": "0.1.0",
   "identifier": "com.privy.cloud",
   "build": {
-    "beforeDevCommand": "npm run dev -w web",
+    "beforeDevCommand": "cd .. && npm run dev -w web",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm run build -w web",
-    "frontendDist": "../web/dist"
+    "beforeBuildCommand": "cd .. && npm run build -w web",
+    "frontendDist": "../../web/dist"
   },
   "app": { "windows": [{ "title": "Privy Cloud", "width": 1280, "height": 800, "minWidth": 960, "minHeight": 600 }], "security": { "csp": null } },
   "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.png"] }
 }
 ```
+
+Path notes — do not "simplify" these:
+- `beforeDevCommand`/`beforeBuildCommand` run with cwd = the Tauri app dir (`desktop/`), where plain `npm run dev -w web` fails ("No workspaces found" — npm resolves `-w` only from the workspace root). `cd .. &&` reaches the repo root where the workspace commands work.
+- `frontendDist` is resolved relative to the config file's directory (`desktop/src-tauri/`), so `../../web/dist` reaches the repo-root `web/dist`; `../web/dist` would resolve to the nonexistent `desktop/web/dist`.
 
 - [ ] **Step 6: Write `desktop/src-tauri/capabilities/default.json`**
 
@@ -2656,7 +2666,6 @@ git commit -m "feat: Tauri desktop shell with auto-starting backend"
 
 **Files:**
 - Create: `README.md`
-- Modify: root `package.json` (finalize scripts)
 
 **Interfaces:**
 - Produces: a runnable v1. A written walkthrough of the manual E2E checks below, plus a README documenting setup, run, and known limitations.
