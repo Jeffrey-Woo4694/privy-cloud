@@ -6,6 +6,7 @@ import { initRootStructure } from './directory.js';
 import { checkPermission } from './permissions.js';
 import { registerRoutes, type ApiContext, type ServerEvent } from './api/routes.js';
 import { attachSocket } from './api/socket.js';
+import { createWatcher } from './watcher.js';
 
 export async function buildApp(opts?: { root?: string }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -31,6 +32,11 @@ export async function buildApp(opts?: { root?: string }): Promise<FastifyInstanc
 
   await registerRoutes(app, ctx);
   await attachSocket(app, ctx, listeners);
+
+  // Watch the root and emit filesystem changes as ServerEvents broadcast over /ws.
+  const watcher = await createWatcher(cfg.root, (e) => ctx.emit(e));
+  app.addHook('onClose', async () => { await watcher.stop(); });
+
   return app;
 }
 
