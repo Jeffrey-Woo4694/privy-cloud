@@ -1754,8 +1754,8 @@ export const api = {
   getFileText: (path: string): Promise<string> => fetch(`${API_BASE}/api/file?path=${encodeURIComponent(path)}`).then((r) => r.text()),
   saveFileText: (path: string, content: string) =>
     req(`/api/file?path=${encodeURIComponent(path)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }),
-  sendText: (text: string): Promise<{ entry: ChatEntry }> =>
-    req('/api/send/text', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }),
+  sendText: async (text: string): Promise<ChatEntry> =>
+    (await req<{ entry: ChatEntry }>('/api/send/text', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })).entry,
   sendFiles: async (files: File[]): Promise<ChatEntry[]> => {
     const entries: ChatEntry[] = [];
     for (const file of files) {
@@ -1782,8 +1782,8 @@ export const api = {
   },
   listChat: (limit = 50): Promise<ChatEntry[]> => req(`/api/chat?limit=${limit}`),
   getMeta: (): Promise<{ root: string; owner: string }> => req('/api/meta'),
-  setRoot: (path: string): Promise<{ root: string }> =>
-    req('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
+  setRoot: async (path: string): Promise<string> =>
+    (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
 };
 ```
 
@@ -1971,12 +1971,48 @@ describe('App', () => {
 });
 ```
 
-- [ ] **Step 8: Run tests, verify they pass**
+- [ ] **Step 8: Write `web/src/__tests__/theme.test.tsx`**
+
+```tsx
+import { beforeEach, describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { ThemeProvider, useTheme } from '../theme';
+
+function Probe() {
+  const { theme, toggle } = useTheme();
+  return <button onClick={toggle}>theme:{theme}</button>;
+}
+
+describe('theme', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('defaults to dark and applies data-theme on mount', () => {
+    render(<ThemeProvider><Probe /></ThemeProvider>);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(screen.getByRole('button').textContent).toBe('theme:dark');
+  });
+
+  it('restores a saved theme from localStorage', () => {
+    localStorage.setItem('privy-theme', 'light');
+    render(<ThemeProvider><Probe /></ThemeProvider>);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('toggle flips the theme and persists it', () => {
+    render(<ThemeProvider><Probe /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button'));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+    expect(localStorage.getItem('privy-theme')).toBe('light');
+  });
+});
+```
+
+- [ ] **Step 9: Run tests, verify they pass**
 
 Run: `npm run test -w web`
-Expected: PASS (App renders, boots to Hermes, switches tab, toggles theme). Note: `PrivyCloudTab` renders before it's implemented — that's fine, the placeholder string matches.
+Expected: PASS (5 tests — App renders, boots to Hermes, switches tab, toggles theme; theme defaults, restores from localStorage, persists on toggle). Note: `PrivyCloudTab` renders before it's implemented — that's fine, the placeholder string matches.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add web/src
