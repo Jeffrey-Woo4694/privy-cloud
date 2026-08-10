@@ -2178,7 +2178,7 @@ export function ChatPanel(props: { entries: ChatEntry[]; onSendText(t: string): 
         <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()}>📁</button>
         <button className="btn primary" disabled={!text.trim()} onClick={() => { props.onSendText(text.trim()); setText(''); }}>Send</button>
         <input ref={fileRef} type="file" multiple hidden onChange={onFile} />
-        <input ref={dirRef} type="file" webkitdirectory="" multiple hidden onChange={onDir} />
+        <input ref={dirRef} type="file" {...({ webkitdirectory: '' } as any)} multiple hidden onChange={onDir} />
       </div>
     </div>
   );
@@ -2214,7 +2214,7 @@ describe('ChatPanel', () => {
 - [ ] **Step 3: Run tests, verify they pass**
 
 Run: `npm run test -w web`
-Expected: PASS (2 tests). If the `import { useState }` at the bottom causes a lint/compile complaint, move it to the top with the other imports.
+Expected: PASS (2 tests). Note on the directory input: `webkitdirectory` is not a standard React 18 JSX attribute, so Step 1 passes it as `{...({ webkitdirectory: '' } as any)}` — that is the only form that clears the mandatory strict-tsc build gate while keeping the folder-picker behavior. Do not "simplify" it back to a bare `webkitdirectory=""` attribute; it fails `npm run build -w web`.
 
 - [ ] **Step 4: Commit**
 
