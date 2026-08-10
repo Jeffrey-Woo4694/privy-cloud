@@ -16,8 +16,8 @@ export const api = {
   getFileText: (path: string): Promise<string> => fetch(`${API_BASE}/api/file?path=${encodeURIComponent(path)}`).then((r) => r.text()),
   saveFileText: (path: string, content: string) =>
     req(`/api/file?path=${encodeURIComponent(path)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }),
-  sendText: (text: string): Promise<{ entry: ChatEntry }> =>
-    req('/api/send/text', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }),
+  sendText: async (text: string): Promise<ChatEntry> =>
+    (await req<{ entry: ChatEntry }>('/api/send/text', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) })).entry,
   sendFiles: async (files: File[]): Promise<ChatEntry[]> => {
     const entries: ChatEntry[] = [];
     for (const file of files) {
@@ -44,6 +44,6 @@ export const api = {
   },
   listChat: (limit = 50): Promise<ChatEntry[]> => req(`/api/chat?limit=${limit}`),
   getMeta: (): Promise<{ root: string; owner: string }> => req('/api/meta'),
-  setRoot: (path: string): Promise<{ root: string }> =>
-    req('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
+  setRoot: async (path: string): Promise<string> =>
+    (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
 };
