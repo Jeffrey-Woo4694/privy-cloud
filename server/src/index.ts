@@ -33,7 +33,7 @@ export async function buildApp(opts?: { root?: string }): Promise<FastifyInstanc
 
   // Serve the built web frontend (web/dist) when present, so one URL exposes UI + API.
   // Dormant until Task 10 creates web/; guarded by existsSync.
-  const webDist = process.env.PRIVY_WEB_DIST ?? new URL('../../../web/dist', import.meta.url).pathname;
+  const webDist = process.env.PRIVY_WEB_DIST ?? new URL('../../web/dist', import.meta.url).pathname;
   if (existsSync(webDist)) {
     await app.register((await import('@fastify/static')).default, { root: webDist, prefix: '/' });
     app.setNotFoundHandler(async (req, reply) => {

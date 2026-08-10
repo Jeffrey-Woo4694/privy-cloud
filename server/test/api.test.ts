@@ -71,4 +71,24 @@ describe('api', () => {
     expect(res.json().root).toBe(newRoot);
     await app.close();
   });
+
+  it('serves the web build from PRIVY_WEB_DIST and keeps /api 404s as JSON', async () => {
+    const webDist = mkdtempSync(join(tmpdir(), 'privy-web-'));
+    writeFileSync(join(webDist, 'index.html'), '<!doctype html><title>privy</title>');
+    const prev = process.env.PRIVY_WEB_DIST;
+    process.env.PRIVY_WEB_DIST = webDist;
+    try {
+      const app = await boot();
+      const page = await app.inject({ method: 'GET', url: '/' });
+      expect(page.statusCode).toBe(200);
+      expect(page.body).toContain('<title>privy</title>');
+      const missing = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.json()).toEqual({ error: 'not found' });
+      await app.close();
+    } finally {
+      if (prev === undefined) delete process.env.PRIVY_WEB_DIST; else process.env.PRIVY_WEB_DIST = prev;
+      rmSync(webDist, { recursive: true, force: true });
+    }
+  });
 });
