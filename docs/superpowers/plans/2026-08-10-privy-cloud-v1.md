@@ -1669,7 +1669,7 @@ Expected: `dist/` produced with no type errors.
 - [ ] **Step 11: Commit**
 
 ```bash
-git add web/
+git add web/ package-lock.json
 git commit -m "chore: scaffold web app with design tokens and build setup"
 ```
 
