@@ -1450,7 +1450,7 @@ if (existsSync(webDist)) {
 
 - [ ] **Step 3: Add a root convenience script and run a full manual walkthrough**
 
-Add to root `package.json`: `"walkthrough": "npm run build -w shared && npm run build -w server && npm run build -w web && PRIVY_ROOT=/tmp/privy-walkthrough node server/dist/index.js"`
+Add to root `package.json`: `"walkthrough": "npm run build -w shared && npm run build -w server && PRIVY_ROOT=/tmp/privy-walkthrough node server/dist/index.js"` (the `web` workspace does not exist until Task 10, so it is deliberately absent here; re-add `&& npm run build -w web` in Task 16 once `web/dist` can exist)
 
 Then:
 ```bash
@@ -1468,7 +1468,7 @@ Expected: meta returns the root; send text returns an entry; items shows `Markdo
 - [ ] **Step 4: Commit**
 
 ```bash
-git add server/src/index.ts package.json server/package.json server/package-lock.json
+git add server/src/index.ts package.json server/package.json package-lock.json
 git commit -m "feat: serve web build from backend, add walkthrough script"
 ```
 
