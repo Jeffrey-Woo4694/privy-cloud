@@ -2580,6 +2580,7 @@ fn main() { privy_cloud_desktop_lib::run(); }
 ```rust
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use tauri::Manager;
 
 struct Backend(Mutex<Option<Child>>);
 
@@ -2587,7 +2588,7 @@ fn backend_script() -> Option<String> {
     if let Ok(p) = std::env::var("PRIVY_BACKEND") { return Some(p); }
     // Resolve server/dist/index.js relative to this crate, falling back to the repo layout.
     for cand in [
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../server/dist/index.js"),
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../server/dist/index.js").to_string(),
         "server/dist/index.js".to_string(),
     ] {
         if std::path::Path::new(&cand).exists() { return Some(cand); }
@@ -2638,6 +2639,11 @@ pub fn run() {
 }
 ```
 
+Notes on `lib.rs` — do not "simplify" these back:
+- `use tauri::Manager;` is required: `.manage()` and `.app_handle()`/`.try_state()` are provided by the `tauri::Manager` trait, which is NOT in scope otherwise (compiles fail with E0599 on `_app.manage` and `window.app_handle`).
+- The `backend_script()` candidates array must be homogeneous `String`: the `concat!` element needs `.to_string()` (the `&str`/`String` mix fails E0308; the compiler's suggestion to drop `.to_string()` on the second element only moves the error to the `Some(cand)` return).
+- Force-killing the app (SIGTERM/SIGKILL) orphans the spawned backend — the kill runs only in the `CloseRequested` handler. Graceful window close kills it; force-kill does not. Known v1 behavior.
+
 - [ ] **Step 9: Build the backend and web first, then verify the Tauri dev flow**
 
 Run:
@@ -2656,9 +2662,11 @@ Expected: a native "Privy Cloud" window opens, loads the frontend, the Hermes Ag
 - [ ] **Step 11: Commit**
 
 ```bash
-git add desktop/
+git add desktop/ package-lock.json
 git commit -m "feat: Tauri desktop shell with auto-starting backend"
 ```
+
+The commit also stages the root `package-lock.json`: `npm install -w desktop` adds the `@privy/desktop` workspace entry + `@tauri-apps/api`/`@tauri-apps/cli` to it, and the root `package.json` already declares the `desktop` workspace — omitting the lockfile hunk would break `npm ci` on a fresh checkout. `desktop/src-tauri/target/` is covered by the root `.gitignore`; the auto-generated `desktop/src-tauri/gen/` schemas and `Cargo.lock` are committed.
 
 ---
 
