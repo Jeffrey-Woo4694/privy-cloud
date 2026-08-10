@@ -801,7 +801,7 @@ git commit -m "feat: permissions skeleton with owner default"
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRootStructure } from '../src/directory.js';
@@ -838,7 +838,8 @@ describe('storage', () => {
     await initRootStructure(root);
     const first = uniquePath(root, 'Documents', 'report.pdf');
     expect(first).toBe('Documents/report.pdf');
-    // simulate existing file
+    // create the file on disk so the second call collides
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'report.pdf'), 'x');
     const second = uniquePath(root, 'Documents', 'report.pdf');
     expect(second).toMatch(/^Documents\/report-\d{8}-\d{6}\.pdf$/);
   });
