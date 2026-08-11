@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import Fastify, { type FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import websocket from '@fastify/websocket';
 import { loadConfig, setRoot } from './config.js';
@@ -11,6 +12,21 @@ import { createWatcher } from './watcher.js';
 
 export async function buildApp(opts?: { root?: string }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+
+  // CORS allowlist so BOTH documented launch paths work cross-origin:
+  // the dev Vite origin (:5173), the same-origin backend-served UI (:5178),
+  // and the two Tauri 2 webview origins (tauri://localhost, https://tauri.localhost).
+  // Allowlist only — never origin: true / '*'. Registered before the permission
+  // hook and routes so preflight/403 responses still carry the CORS headers.
+  await app.register(cors, {
+    origin: [
+      'http://localhost:5173',
+      'http://localhost:5178',
+      'tauri://localhost',
+      'https://tauri.localhost',
+    ],
+  });
+
   await app.register(multipart);
   await app.register(websocket);
 
