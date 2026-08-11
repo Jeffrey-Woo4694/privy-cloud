@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/index.js';
@@ -60,6 +60,48 @@ describe('api', () => {
     const app = await boot();
     const bad = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('../secret.txt') });
     expect(bad.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('folder upload streams per-part and survives files beyond the backpressure threshold', async () => {
+    const app = await boot();
+    const BOUNDARY = '----privy-test';
+    const CRLF = '\r\n';
+    const mkPart = (head: string, body: Buffer): Buffer =>
+      Buffer.concat([Buffer.from(`--${BOUNDARY}${CRLF}${head}${CRLF}${CRLF}`), body, Buffer.from(CRLF)]);
+    const mkField = (name: string, value: string): Buffer =>
+      Buffer.from(`--${BOUNDARY}${CRLF}Content-Disposition: form-data; name="${name}"${CRLF}${CRLF}${value}${CRLF}`);
+    // 200 KB of a known repeating byte pattern per file — far beyond the ~16 KB
+    // busboy backpressure threshold that stalls the old collect-all handler.
+    const bigPayload = (seed: number): Buffer => {
+      const b = Buffer.alloc(200 * 1024);
+      for (let i = 0; i < b.length; i++) b[i] = (seed + i) % 251;
+      return b;
+    };
+    const css = bigPayload(1);
+    const png = bigPayload(200);
+    const body = Buffer.concat([
+      mkField('folderName', 'assets'),
+      mkField('relativePath', 'css/app.css'),
+      mkPart(`Content-Disposition: form-data; name="file"; filename="app.css"${CRLF}Content-Type: text/css`, css),
+      mkField('relativePath', 'img/logo.png'),
+      mkPart(`Content-Disposition: form-data; name="file"; filename="logo.png"${CRLF}Content-Type: image/png`, png),
+      Buffer.from(`--${BOUNDARY}--${CRLF}`),
+    ]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/send/folder',
+      headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { entry: { type: string } }).entry.type).toBe('folder');
+    const cssPath = join(root, 'Privy Cloud', 'Folders', 'assets', 'css', 'app.css');
+    const pngPath = join(root, 'Privy Cloud', 'Folders', 'assets', 'img', 'logo.png');
+    expect(existsSync(cssPath)).toBe(true);
+    expect(existsSync(pngPath)).toBe(true);
+    expect(readFileSync(cssPath)).toEqual(css);
+    expect(readFileSync(pngPath)).toEqual(png);
     await app.close();
   });
 

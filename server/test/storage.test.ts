@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,6 +40,27 @@ describe('storage', () => {
     writeFileSync(join(root, 'Privy Cloud', 'Documents', 'report.pdf'), 'x');
     const second = uniquePath(root, 'Documents', 'report.pdf');
     expect(second).toMatch(/^Documents\/report-\d{8}-\d{6}\.pdf$/);
+  });
+
+  it('uniquePath re-checks collisions so same-second uploads never overwrite', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    // Freeze the clock so all three writes land in the same stamp() second — the
+    // old code returns the same -<stamp> path for the 2nd and 3rd collision.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-02T03:04:05Z'));
+    try {
+      const a = await storeFile(root, 'burst.png', Buffer.from('aaaa'));
+      const b = await storeFile(root, 'burst.png', Buffer.from('bbbb'));
+      const c = await storeFile(root, 'burst.png', Buffer.from('cccc'));
+      const paths = [a.path, b.path, c.path];
+      expect(new Set(paths).size).toBe(3);
+      expect(readFileSync(join(root, 'Privy Cloud', a.path!), 'utf8')).toBe('aaaa');
+      expect(readFileSync(join(root, 'Privy Cloud', b.path!), 'utf8')).toBe('bbbb');
+      expect(readFileSync(join(root, 'Privy Cloud', c.path!), 'utf8')).toBe('cccc');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('storeFolder preserves structure under Folders/<name>', async () => {

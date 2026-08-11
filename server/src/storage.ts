@@ -1,4 +1,5 @@
-import { mkdirSync, createWriteStream, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { rename, copyFile, rm } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { join, dirname, basename, extname } from 'node:path';
@@ -20,11 +21,19 @@ export function stamp(): string {
 }
 
 export function uniquePath(root: string, folder: string, name: string): string {
-  const rel = `${folder}/${name}`;
-  if (!existsSync(resolveSafe(privyBase(root), rel)!)) return rel;
   const ext = extname(name);
   const base = basename(name, ext);
-  return `${folder}/${base}-${stamp()}${ext}`;
+  const free = (rel: string) => !existsSync(resolveSafe(privyBase(root), rel)!);
+  const plain = `${folder}/${name}`;
+  if (free(plain)) return plain;
+  // The stamped name is itself a candidate, so re-check it and append an
+  // incrementing nonce when it is also taken (same-second collisions). This
+  // guarantees a free path, never silently overwriting an existing file.
+  for (let n = 0; ; n++) {
+    const suffix = n === 0 ? stamp() : `${stamp()}-${n}`;
+    const cand = `${folder}/${base}-${suffix}${ext}`;
+    if (free(cand)) return cand;
+  }
 }
 
 async function writeAbs(root: string, rel: string, data: UploadData): Promise<void> {
@@ -62,4 +71,51 @@ export async function storeFolder(root: string, folderName: string, files: Array
     await writeAbs(root, rel, f.data);
   }
   return appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
+}
+
+/** Cross-device-safe move: rename, falling back to copy+remove when EXDEV. */
+async function moveFile(from: string, to: string): Promise<void> {
+  try {
+    await rename(from, to);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    await copyFile(from, to);
+    await rm(from, { force: true });
+  }
+}
+
+/**
+ * Move already-staged temp files (written outside the watched root) into
+ * Folders/<folderName>/<relativePath>, append a folder chat entry, and clean up
+ * the staging dir. On any failure it removes the files already moved in (and the
+ * folder itself when we created it) so no partial folder or temp litter remains.
+ */
+export async function stageFolderUpload(
+  root: string,
+  folderName: string,
+  files: Array<{ relativePath: string; tmpPath: string }>,
+  tmpDir: string,
+): Promise<ChatEntry> {
+  const base = uniquePath(root, 'Folders', folderName);
+  const baseAbs = resolveSafe(privyBase(root), base);
+  if (!baseAbs) throw new Error('unsafe folder path');
+  const baseExisted = existsSync(baseAbs);
+  const moved: string[] = [];
+  try {
+    for (const f of files) {
+      const rel = join(base, f.relativePath);
+      const abs = resolveSafe(privyBase(root), rel);
+      if (!abs) throw new Error('unsafe folder path');
+      mkdirSync(dirname(abs), { recursive: true });
+      await moveFile(f.tmpPath, abs);
+      moved.push(abs);
+    }
+    return appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
+  } catch (err) {
+    for (const abs of moved) rmSync(abs, { force: true });
+    if (!baseExisted) rmSync(baseAbs, { recursive: true, force: true });
+    throw err;
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
 }

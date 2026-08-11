@@ -1,10 +1,13 @@
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
 import type { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
 import { listItems, resolveSafe, initRootStructure, privyBase } from '../directory.js';
-import { storeText, storeFile, storeFolder } from '../storage.js';
+import { storeText, storeFile, stageFolderUpload } from '../storage.js';
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
@@ -112,20 +115,36 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const parts = (req as unknown as { parts(): AsyncIterable<UploadPart> }).parts();
     let folderName = 'folder';
     let pendingRel: string | undefined; // client sends `relativePath` immediately before each file part
-    const files: Array<{ relativePath: string; data: Readable }> = [];
-    for await (const part of parts) {
-      if (part.type === 'file') {
-        files.push({ relativePath: pendingRel ?? part.filename ?? '', data: part.file });
-        pendingRel = undefined;
-      } else if (part.fieldname === 'folderName') {
-        folderName = String(part.value ?? 'folder');
-      } else if (part.fieldname === 'relativePath') {
-        pendingRel = String(part.value ?? '');
+    // Drain each part.file to a temp file OUTSIDE the watched root as it is
+    // iterated. Collecting the streams and only reading them after the loop lets
+    // busboy's ~16 KB per-file buffer fill, stalling the iterator on any file
+    // larger than that. The temp dir also keeps the watcher from firing on the
+    // staging writes; files are moved into the root only after the loop ends.
+    const tmpDir = mkdtempSync(join(tmpdir(), 'privy-upload-'));
+    const files: Array<{ relativePath: string; tmpPath: string }> = [];
+    try {
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const rel = pendingRel ?? part.filename ?? '';
+          const tmpPath = join(tmpDir, `${files.length}-${basename(rel) || 'part'}`);
+          await pipeline(part.file, createWriteStream(tmpPath));
+          files.push({ relativePath: rel, tmpPath });
+          pendingRel = undefined;
+        } else if (part.fieldname === 'folderName') {
+          folderName = String(part.value ?? 'folder');
+        } else if (part.fieldname === 'relativePath') {
+          pendingRel = String(part.value ?? '');
+        }
       }
+      const entry = await stageFolderUpload(ctx.getRoot(), folderName, files, tmpDir);
+      ctx.emit({ type: 'chat:new', entry });
+      return { entry };
+    } catch (err) {
+      // Safety net for failures before/around stageFolderUpload (which cleans up
+      // files it already moved): never leave temp litter behind.
+      rmSync(tmpDir, { recursive: true, force: true });
+      throw err;
     }
-    const entry = await storeFolder(ctx.getRoot(), folderName, files);
-    ctx.emit({ type: 'chat:new', entry });
-    return { entry };
   });
 
   app.get('/api/chat', async (req) => {
