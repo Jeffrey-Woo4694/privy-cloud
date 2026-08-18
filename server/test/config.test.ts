@@ -28,4 +28,15 @@ describe('config', () => {
     expect(existsSync(cfgFile)).toBe(true);
     expect(JSON.parse(readFileSync(cfgFile, 'utf8')).root).toBe(target);
   });
+
+  it('loadConfig generates and persists a 64-hex-char token', async () => {
+    const home = fakeHome(); process.env.HOME = home; process.env.PRIVY_ROOT = '';
+    const cfg = await loadConfig();
+    expect(cfg.token).toMatch(/^[0-9a-f]{64}$/);
+    const raw = JSON.parse(readFileSync(join(home, '.privy-cloud', 'config.json'), 'utf8'));
+    expect(raw.token).toBe(cfg.token);
+    // A second load returns the same token (idempotent).
+    const again = await loadConfig();
+    expect(again.token).toBe(cfg.token);
+  });
 });
