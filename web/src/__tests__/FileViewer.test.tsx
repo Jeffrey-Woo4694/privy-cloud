@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FileViewer } from '../components/FileViewer';
 import { api } from '../api';
@@ -13,6 +13,7 @@ const md: FileItem = { name: 'n.md', path: 'Markdown/n.md', kind: 'markdown', si
 const img: FileItem = { name: 'p.png', path: 'Images/p.png', kind: 'image', size: 1, isDir: false, modifiedAt: 'x' };
 
 describe('FileViewer', () => {
+  beforeEach(() => localStorage.clear());
   it('edits markdown and saves', async () => {
     (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('# hi');
     const onSaved = vi.fn();
@@ -26,6 +27,12 @@ describe('FileViewer', () => {
 
   it('renders an image with the file URL', () => {
     render(<FileViewer item={img} onBack={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.getByRole('img')).toHaveAttribute('src', 'http://test/api/file?path=Images%2Fp.png');
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'http://test/api/file?path=Images%2Fp.png&token=');
+  });
+
+  it('includes the token on media URLs when present', () => {
+    localStorage.setItem('privy-token', 't');
+    render(<FileViewer item={img} onBack={vi.fn()} onSaved={vi.fn()} />);
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'http://test/api/file?path=Images%2Fp.png&token=t');
   });
 });

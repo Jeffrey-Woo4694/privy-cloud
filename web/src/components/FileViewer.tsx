@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { FileItem } from '@privy/shared';
 import { api, API_BASE } from '../api';
+import { getToken } from '../auth';
 import { MarkdownEditor } from './MarkdownEditor';
 
 export function FileViewer({ item, onBack, onSaved }: { item: FileItem; onBack(): void; onSaved(): void }) {
-  const url = `${API_BASE}/api/file?path=${encodeURIComponent(item.path)}`;
+  const url = `${API_BASE}/api/file?path=${encodeURIComponent(item.path)}&token=${encodeURIComponent(getToken() ?? '')}`;
   const [text, setText] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);

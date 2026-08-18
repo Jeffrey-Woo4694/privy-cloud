@@ -49,5 +49,5 @@ export const api = {
   getMeta: (): Promise<{ root: string; owner: string }> => req('/api/meta'),
   setRoot: async (path: string): Promise<string> =>
     (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
-  proxyUrl: (path: string): string => `${API_BASE}/api/proxy?path=${encodeURIComponent(path)}`,
+  proxyUrl: (path: string): string => `${API_BASE}/api/proxy?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
 };
