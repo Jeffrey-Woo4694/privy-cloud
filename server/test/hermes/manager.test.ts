@@ -5,14 +5,18 @@ import { join } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { AddressInfo } from 'node:net';
 import { createHermesManager } from '../../src/hermes/manager.js';
+import type { ClientEvent } from '../../src/hermes/client.js';
 
 // Mock Hermes gateway: a `ws` WebSocketServer on an ephemeral port. The
 // manager's connectHermes will dial `ws://127.0.0.1:{port}/api/ws?token=...`.
+// It answers `session.create` (a fresh session) and `session.resume` (replays
+// a stored session's messages, recording each resume call for assertions).
 async function startMockServer() {
   const wss = new WebSocketServer({ port: 0 });
   await new Promise<void>((resolve) => wss.once('listening', resolve));
   const port = (wss.address() as AddressInfo).port;
   const sockets = new Set<WebSocket>();
+  const resumeCalls: { session_id: string }[] = [];
   wss.on('connection', (socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
@@ -20,10 +24,21 @@ async function startMockServer() {
       const frame = JSON.parse(data.toString());
       if (frame.method === 'session.create') {
         socket.send(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { session_id: 'abc12345' } }));
+      } else if (frame.method === 'session.resume') {
+        resumeCalls.push(frame.params);
+        socket.send(JSON.stringify({
+          jsonrpc: '2.0',
+          id: frame.id,
+          result: {
+            session_id: 'live1',
+            session_key: frame.params.session_id,
+            messages: [{ role: 'user', text: 'hello from stored session' }],
+          },
+        }));
       }
     });
   });
-  return { wss, port, sockets };
+  return { wss, port, sockets, resumeCalls };
 }
 
 /// Retry `fn` (which throws on failure) until it passes or the deadline hits.
@@ -94,5 +109,40 @@ describe('hermes manager', () => {
     await expect(mgr.call('session.create', {})).rejects.toThrow('hermes not connected');
     await mgr.stop();
     expect(mgr.getStatus()).toBe('disconnected');
+  }, 10000);
+
+  it('resume on reconnect re-resumes the bound session', async () => {
+    const { wss, port, sockets, resumeCalls } = await startMockServer();
+    const { path, pidfile } = writeFakeHermes(port);
+
+    const mgr = createHermesManager(path, { reconnectDelayMs: 50 });
+    const events: ClientEvent[] = [];
+    mgr.onEvent((e) => events.push(e));
+    try {
+      mgr.start();
+      await poll(() => { expect(mgr.getStatus()).toBe('connected'); });
+
+      mgr.setResume('stored1');
+
+      // Force a disconnect from the server side. The manager's reconnect loop
+      // should respawn + reconnect, then re-resume the bound session.
+      for (const s of sockets) s.terminate();
+
+      await poll(() => { expect(resumeCalls.some((c) => c.session_id === 'stored1')).toBe(true); });
+      // The resynced history must be forwarded only after a successful resume.
+      await poll(() => { expect(events.some((e) => e.kind === 'resynced')).toBe(true); });
+      const resynced = events.find((e) => e.kind === 'resynced');
+      expect(resynced).toEqual({
+        kind: 'resynced',
+        messages: [{ role: 'user', text: 'hello from stored session' }],
+      });
+    } finally {
+      await mgr.stop();
+      expect(mgr.getStatus()).toBe('disconnected');
+      for (const s of sockets) s.terminate();
+      await new Promise<void>((resolve) => wss.close(() => resolve()));
+      rmSync(path, { force: true });
+      rmSync(pidfile, { force: true });
+    }
   }, 10000);
 });

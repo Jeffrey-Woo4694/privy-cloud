@@ -18,6 +18,9 @@ export interface HermesManager {
   getStatus(): HermesStatus;
   stop(): Promise<void>; // shutdown client + kill child
   onEvent(cb: (e: ClientEvent) => void): void; // forward client events
+  // Record the durable session key to re-resume on every reconnect. A null
+  // key (fresh draft) disables re-resume.
+  setResume(sessionKey: string | null): void;
 }
 
 /// How long the reconnect loop waits between attempts when serve/connect
@@ -41,6 +44,8 @@ export function createHermesManager(
   let running = false;
   let current: Session | undefined;
   let loopPromise: Promise<void> | undefined;
+  // Durable session key to re-resume after each reconnect (null = fresh draft).
+  let resumeKey: string | null = null;
   // Lets stop() cut a pending reconnect backoff short instead of waiting it out.
   let wakeSleep: (() => void) | undefined;
   const listeners = new Set<(e: ClientEvent) => void>();
@@ -123,6 +128,27 @@ export function createHermesManager(
         }
         setStatus('connected');
 
+        // Best-effort re-resume of the bound session. A fresh serve leaves
+        // the session unregistered on the gateway (live session_id goes stale
+        // on reconnect), so re-running `session.resume` re-registers it and
+        // replays its history. Failure is swallowed: the session still works
+        // for `prompt.submit`, just without the resynced transcript.
+        if (resumeKey !== null) {
+          try {
+            const result = (await client.call('session.resume', { session_id: resumeKey })) as {
+              messages?: unknown[];
+            };
+            const messages = Array.isArray(result?.messages) ? result.messages : [];
+            forward({ kind: 'resynced', messages });
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              '[hermes] session.resume failed (best-effort):',
+              err instanceof Error ? err.message : String(err),
+            );
+          }
+        }
+
         await Promise.race([disconnected, childExit]);
       } catch (err) {
         if (running) {
@@ -168,6 +194,9 @@ export function createHermesManager(
     },
     onEvent(cb) {
       listeners.add(cb);
+    },
+    setResume(sessionKey) {
+      resumeKey = sessionKey;
     },
   };
 }

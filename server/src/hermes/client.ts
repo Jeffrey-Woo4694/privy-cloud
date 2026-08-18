@@ -14,7 +14,10 @@ export type ClientEvent =
   | { kind: 'event'; event: AgentEvent; sessionId: string | null }
   | { kind: 'response'; id: number; result: unknown }
   | { kind: 'error'; id: number; code: number; message: string }
-  | { kind: 'disconnected' };
+  | { kind: 'disconnected' }
+  // Emitted by the manager (not the raw client) after a successful
+  // `session.resume` on reconnect, carrying the replayed message history.
+  | { kind: 'resynced'; messages: unknown[] };
 
 export interface HermesClient {
   call(method: string, params: unknown): Promise<unknown>;
