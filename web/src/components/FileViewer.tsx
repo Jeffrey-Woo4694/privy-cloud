@@ -6,23 +6,61 @@ import { MarkdownEditor } from './MarkdownEditor';
 export function FileViewer({ item, onBack, onSaved }: { item: FileItem; onBack(): void; onSaved(): void }) {
   const url = `${API_BASE}/api/file?path=${encodeURIComponent(item.path)}`;
   const [text, setText] = useState('');
+  const [videoFailed, setVideoFailed] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     if (item.kind === 'markdown') api.getFileText(item.path).then(setText);
   }, [item.path, item.kind]);
+
+  useEffect(() => { setVideoFailed(false); setImageFailed(false); }, [item.path]);
 
   return (
     <div className="viewer">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <button className="back-link" onClick={onBack}>← Back to sharing</button>
         <span style={{ fontWeight: 600 }}>{item.name}</span>
+        <span style={{ flex: 1 }} />
+        {(item.kind === 'video' || item.kind === 'image') && <a className="btn" href={url} download={item.name}>Download original</a>}
       </div>
       {item.kind === 'markdown' && (
         <MarkdownEditor path={item.path} initialText={text}
           onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />
       )}
-      {item.kind === 'image' && <div className="viewer-body"><img src={url} alt={item.name} /></div>}
-      {item.kind === 'video' && <div className="viewer-body"><video src={url} controls /></div>}
+      {item.kind === 'image' && (
+        <div className="viewer-body">
+          {item.proxyPending ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
+              <div style={{ fontSize: 40 }}>⏳</div>
+              <p>Preparing preview…</p>
+            </div>
+          ) : imageFailed ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
+              <div style={{ fontSize: 40 }}>🖼️</div>
+              <p>Preview unavailable. Use "Download original".</p>
+            </div>
+          ) : (
+            <img src={item.hasProxy ? api.proxyUrl(item.path) : url} alt={item.name} onError={() => setImageFailed(true)} />
+          )}
+        </div>
+      )}
+      {item.kind === 'video' && (
+        <div className="viewer-body">
+          {item.proxyPending ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
+              <div style={{ fontSize: 40 }}>⏳</div>
+              <p>Transcoding for preview…</p>
+            </div>
+          ) : videoFailed ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
+              <div style={{ fontSize: 40 }}>🎬</div>
+              <p>Preview unavailable for this video. Use "Download original".</p>
+            </div>
+          ) : (
+            <video src={item.hasProxy ? api.proxyUrl(item.path) : url} controls onError={() => setVideoFailed(true)} />
+          )}
+        </div>
+      )}
       {item.kind === 'document' && item.name.toLowerCase().endsWith('.pdf') && (
         <div className="viewer-body"><iframe src={url} title={item.name} style={{ width: '100%', height: '100%', border: 'none' }} /></div>
       )}

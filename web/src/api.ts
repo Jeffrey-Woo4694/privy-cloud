@@ -1,6 +1,8 @@
 import type { ChatEntry, FileItem, Kind } from '@privy/shared';
 
-export const API_BASE: string = import.meta.env.VITE_API_BASE ?? 'http://localhost:5178';
+// Same-origin by default so the UI works when served by the backend (localhost, LAN, or tunnel).
+// Dev mode overrides via web/.env.development (VITE_API_BASE=http://localhost:5178).
+export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, init);
@@ -46,4 +48,5 @@ export const api = {
   getMeta: (): Promise<{ root: string; owner: string }> => req('/api/meta'),
   setRoot: async (path: string): Promise<string> =>
     (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
+  proxyUrl: (path: string): string => `${API_BASE}/api/proxy?path=${encodeURIComponent(path)}`,
 };

@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, mkdtempSync, rmSync } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
@@ -6,11 +6,12 @@ import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
-import { listItems, resolveSafe, initRootStructure, privyBase } from '../directory.js';
+import { listItems, resolveSafe, initRootStructure, privyBase, proxyPathFor } from '../directory.js';
 import { storeText, storeFile, stageFolderUpload } from '../storage.js';
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
+import { ensureProxy } from '../transcode.js';
 
 export type ServerEvent =
   | { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' }
@@ -85,6 +86,18 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     return reply.type(mimeFor(name)).send(createReadStream(abs));
   });
 
+  // Playable proxy for a video (HEVC→H.264) or image (HEIC→JPEG) whose original isn't
+  // browser-decodable. The proxy filename is derived from `rel` (never raw user input).
+  app.get('/api/proxy', async (req, reply) => {
+    const rel = (req.query as { path: string }).path ?? '';
+    if (!privyResolve(ctx, rel)) return reply.code(400).send({ error: 'unsafe path' });
+    const kind = detectKind(rel.split('/').pop() ?? '', false);
+    if (kind !== 'video' && kind !== 'image') return reply.code(404).send({ error: 'not a media file' });
+    const proxy = proxyPathFor(ctx.getRoot(), rel, kind);
+    if (!existsSync(proxy)) return reply.code(404).send({ error: 'proxy not ready' });
+    return reply.type(kind === 'video' ? 'video/mp4' : 'image/jpeg').send(createReadStream(proxy));
+  });
+
   app.put('/api/file', async (req, reply) => {
     const rel = (req.query as { path: string }).path ?? '';
     const abs = privyResolve(ctx, rel);
@@ -108,6 +121,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const part = await (req as unknown as { file(): Promise<UploadPart> }).file();
     const entry = await storeFile(ctx.getRoot(), part.filename ?? 'upload.bin', part.file);
     ctx.emit({ type: 'chat:new', entry });
+    if ((entry.kind === 'video' || entry.kind === 'image') && entry.path) void ensureProxy(ctx.getRoot(), entry.path, entry.kind, ctx.emit);
     return { entry };
   });
 
@@ -136,8 +150,12 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
           pendingRel = String(part.value ?? '');
         }
       }
-      const entry = await stageFolderUpload(ctx.getRoot(), folderName, files, tmpDir);
+      const { entry, fileRels } = await stageFolderUpload(ctx.getRoot(), folderName, files, tmpDir);
       ctx.emit({ type: 'chat:new', entry });
+      for (const rel of fileRels) {
+        const kind = detectKind(rel.split('/').pop() ?? '', false);
+        if (kind === 'video' || kind === 'image') void ensureProxy(ctx.getRoot(), rel, kind, ctx.emit);
+      }
       return { entry };
     } catch (err) {
       // Safety net for failures before/around stageFolderUpload (which cleans up

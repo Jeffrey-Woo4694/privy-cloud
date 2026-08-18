@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
@@ -9,6 +10,7 @@ import { checkPermission } from './permissions.js';
 import { registerRoutes, type ApiContext, type ServerEvent } from './api/routes.js';
 import { attachSocket } from './api/socket.js';
 import { createWatcher } from './watcher.js';
+import { backfillProxies, cleanupOrphanedProxies } from './transcode.js';
 
 export async function buildApp(opts?: { root?: string }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -25,11 +27,20 @@ export async function buildApp(opts?: { root?: string }): Promise<FastifyInstanc
       'tauri://localhost',
       'https://tauri.localhost',
     ],
+    // @fastify/cors defaults methods to GET,HEAD,POST, which omits PUT/PATCH/DELETE.
+    // The markdown save is a PUT, so allow the full standard set.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
 
-  await app.register(multipart);
+  // No per-file size cap: @fastify/multipart defaults fileSize to Fastify's
+  // bodyLimit (1 MiB), which silently truncates any larger upload (photos,
+  // videos) at exactly 1 MiB. Restore busboy's native unlimited default.
+  await app.register(multipart, { limits: { fileSize: Infinity } });
   await app.register(websocket);
 
+  // An injected root (tests, PRIVY_ROOT walkthrough) is an ephemeral override:
+  // changing it must not persist to the real ~/.privy-cloud/config.json.
+  const ephemeral = Boolean(opts?.root);
   const cfg = opts?.root ? { root: opts.root } : await loadConfig();
   await initRootStructure(cfg.root);
 
@@ -43,7 +54,7 @@ export async function buildApp(opts?: { root?: string }): Promise<FastifyInstanc
   const listeners: Array<(e: ServerEvent) => void> = [];
   const ctx: ApiContext = {
     getRoot: () => cfg.root,
-    setRootPath: async (p) => { const r = await setRoot(p); cfg.root = r; return r; },
+    setRootPath: async (p) => { const r = ephemeral ? resolve(p) : await setRoot(p); cfg.root = r; return r; },
     emit: (e) => { for (const l of listeners) l(e); },
   };
 
@@ -65,10 +76,18 @@ export async function buildApp(opts?: { root?: string }): Promise<FastifyInstanc
   const watcher = await createWatcher(cfg.root, (e) => ctx.emit(e));
   app.addHook('onClose', async () => { await watcher.stop(); });
 
+  // Remove proxies for videos deleted on-disk, then backfill proxies for HEVC videos already
+  // in the vault (and recover interrupted transcodes). Fire-and-forget; new uploads trigger
+  // transcoding inline instead. The interval keeps orphans cleaned without a server restart.
+  void cleanupOrphanedProxies(cfg.root);
+  void backfillProxies(cfg.root, ctx.emit);
+  const cleanupTimer = setInterval(() => { void cleanupOrphanedProxies(cfg.root); }, 60_000);
+  app.addHook('onClose', async () => { clearInterval(cleanupTimer); });
+
   return app;
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
   const app = await buildApp();
-  await app.listen({ port: Number(process.env.PRIVY_PORT ?? 5178) });
+  await app.listen({ port: Number(process.env.PRIVY_PORT ?? 5178), host: process.env.PRIVY_HOST ?? '127.0.0.1' });
 }

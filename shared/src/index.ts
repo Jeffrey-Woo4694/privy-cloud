@@ -18,6 +18,8 @@ export const KIND_FOLDER: Record<Kind, string> = Object.fromEntries(
 
 export interface FileItem {
   name: string; path: string; kind: Kind; size: number; isDir: boolean; modifiedAt: string;
+  hasProxy?: boolean;      // video/image: a browser-playable proxy exists
+  proxyPending?: boolean;  // video/image: transcode to a playable proxy is in progress
 }
 
 export interface ChatEntry {

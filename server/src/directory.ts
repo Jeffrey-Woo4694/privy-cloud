@@ -39,12 +39,17 @@ export async function listItems(root: string): Promise<FileItem[]> {
       const st = statSync(abs);
       const rel = relative(base, abs);
       const isDir = st.isDirectory();
-      out.push({
-        name, path: rel, isDir,
-        kind: detectKind(name, isDir),
+      const kind = detectKind(name, isDir);
+      const item: FileItem = {
+        name, path: rel, isDir, kind,
         size: isDir ? 0 : st.size,
         modifiedAt: st.mtime.toISOString(),
-      });
+      };
+      if ((kind === 'video' || kind === 'image') && !isDir) {
+        item.hasProxy = existsSync(proxyPathFor(root, rel, kind));
+        item.proxyPending = !item.hasProxy && existsSync(pendingPathFor(root, rel, kind));
+      }
+      out.push(item);
       if (isDir) walk(abs);
     }
   };
@@ -54,4 +59,25 @@ export async function listItems(root: string): Promise<FileItem[]> {
 
 export function folderFor(kind: Kind): string {
   return KIND_FOLDER[kind];
+}
+
+/** Directory holding playable media proxies. Hidden from the grid (name starts with `.`). */
+export function proxyDir(root: string): string {
+  return join(privyBase(root), '.privy', 'proxies');
+}
+
+/** Media kinds that get a transcoded preview proxy (video → H.264, image → JPEG). */
+export type ProxyKind = 'video' | 'image';
+
+export const PROXY_EXT: Record<ProxyKind, string> = { video: '.mp4', image: '.jpg' };
+
+/** Proxy path for a media file (rel is relative to `Privy Cloud/`). Mirrors the original's
+ *  path with a kind-specific suffix so it can be reversed back for orphan cleanup. */
+export function proxyPathFor(root: string, rel: string, kind: ProxyKind): string {
+  return join(proxyDir(root), `${rel}${PROXY_EXT[kind]}`);
+}
+
+/** Marker written while a proxy is being transcoded (cleared on success/failure). */
+export function pendingPathFor(root: string, rel: string, kind: ProxyKind): string {
+  return `${proxyPathFor(root, rel, kind)}.pending`;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/index.js';
 import { initRootStructure } from '../src/directory.js';
@@ -105,6 +105,33 @@ describe('api', () => {
     await app.close();
   });
 
+  it('stores a single file larger than 1 MiB without truncation', async () => {
+    const app = await boot();
+    const BOUNDARY = '----privy-test';
+    const CRLF = '\r\n';
+    const SIZE = 2 * 1024 * 1024; // 2 MiB, past the old 1 MiB default
+    const body = Buffer.alloc(SIZE);
+    for (let i = 0; i < SIZE; i++) body[i] = (i * 31 + 7) % 251;
+    const payload = Buffer.concat([
+      Buffer.from(`--${BOUNDARY}${CRLF}Content-Disposition: form-data; name="file"; filename="big.jpg"${CRLF}Content-Type: image/jpeg${CRLF}${CRLF}`),
+      body,
+      Buffer.from(`${CRLF}--${BOUNDARY}--${CRLF}`),
+    ]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/send/file',
+      headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      payload,
+    });
+    expect(res.statusCode).toBe(200);
+    const entry = res.json().entry as { path: string };
+    expect(entry.path).toMatch(/^Images\//);
+    const stored = readFileSync(join(root, 'Privy Cloud', entry.path));
+    expect(stored.length).toBe(SIZE);
+    expect(stored.equals(body)).toBe(true);
+    await app.close();
+  });
+
   it('setRoot re-inits the new root', async () => {
     const app = await boot();
     const newRoot = mkdtempSync(join(tmpdir(), 'privy-new-'));
@@ -112,6 +139,20 @@ describe('api', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().root).toBe(newRoot);
     await app.close();
+  });
+
+  it('does not persist an injected root into the home config', async () => {
+    const configFile = join(homedir(), '.privy-cloud', 'config.json');
+    const before = existsSync(configFile) ? readFileSync(configFile, 'utf8') : null;
+    const app = await boot();
+    const newRoot = mkdtempSync(join(tmpdir(), 'privy-new-'));
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/root', payload: { path: newRoot } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().root).toBe(newRoot);
+    await app.close();
+    const after = existsSync(configFile) ? readFileSync(configFile, 'utf8') : null;
+    expect(after).toBe(before);
+    rmSync(newRoot, { recursive: true, force: true });
   });
 
   it('serves the web build from PRIVY_WEB_DIST and keeps /api 404s as JSON', async () => {

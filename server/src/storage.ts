@@ -95,12 +95,13 @@ export async function stageFolderUpload(
   folderName: string,
   files: Array<{ relativePath: string; tmpPath: string }>,
   tmpDir: string,
-): Promise<ChatEntry> {
+): Promise<{ entry: ChatEntry; fileRels: string[] }> {
   const base = uniquePath(root, 'Folders', folderName);
   const baseAbs = resolveSafe(privyBase(root), base);
   if (!baseAbs) throw new Error('unsafe folder path');
   const baseExisted = existsSync(baseAbs);
   const moved: string[] = [];
+  const fileRels: string[] = [];
   try {
     for (const f of files) {
       const rel = join(base, f.relativePath);
@@ -109,8 +110,10 @@ export async function stageFolderUpload(
       mkdirSync(dirname(abs), { recursive: true });
       await moveFile(f.tmpPath, abs);
       moved.push(abs);
+      fileRels.push(rel);
     }
-    return appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
+    const entry = await appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
+    return { entry, fileRels };
   } catch (err) {
     for (const abs of moved) rmSync(abs, { force: true });
     if (!baseExisted) rmSync(baseAbs, { recursive: true, force: true });
