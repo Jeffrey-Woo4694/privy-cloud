@@ -1,11 +1,12 @@
 import type { ChatEntry, FileItem, Kind } from '@privy/shared';
+import { getToken } from './auth';
 
 // Same-origin by default so the UI works when served by the backend (localhost, LAN, or tunnel).
 // Dev mode overrides via web/.env.development (VITE_API_BASE=http://localhost:5178).
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init);
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers: { ...init?.headers, authorization: `Bearer ${getToken() ?? ''}` } });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error((body as { error?: string }).error ?? `Request failed: ${res.status}`);
@@ -15,7 +16,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   listItems: (kind?: Kind): Promise<FileItem[]> => req(`/api/items${kind ? `?kind=${kind}` : ''}`),
-  getFileText: (path: string): Promise<string> => fetch(`${API_BASE}/api/file?path=${encodeURIComponent(path)}`).then((r) => r.text()),
+  getFileText: (path: string): Promise<string> => fetch(`${API_BASE}/api/file?path=${encodeURIComponent(path)}`, { headers: { authorization: `Bearer ${getToken() ?? ''}` } }).then((r) => r.text()),
   saveFileText: (path: string, content: string) =>
     req(`/api/file?path=${encodeURIComponent(path)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }),
   sendText: async (text: string): Promise<ChatEntry> =>

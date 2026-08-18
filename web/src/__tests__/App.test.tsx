@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { App } from '../App';
 
 describe('App', () => {
+  beforeEach(() => localStorage.setItem('privy-token', 't'));
   it('boots into the Hermes tab', () => {
     render(<App />);
     // The placeholder body text is unique to the Hermes tab (the tab label shares the name).

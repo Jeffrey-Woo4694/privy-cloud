@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ThemeProvider, useTheme } from './theme';
+import { LoginGate } from './components/LoginGate';
 import { HermesTab } from './pages/HermesTab';
 import { CodingAgentTab } from './pages/CodingAgentTab';
 import { PrivyCloudTab } from './pages/PrivyCloudTab';
@@ -33,5 +34,5 @@ function Shell() {
 }
 
 export function App() {
-  return <ThemeProvider><Shell /></ThemeProvider>;
+  return <ThemeProvider><LoginGate><Shell /></LoginGate></ThemeProvider>;
 }
