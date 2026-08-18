@@ -8,7 +8,8 @@ export function connect(callbacks: WsCallbacks): () => void {
   let ws: WebSocket | undefined;
   let closed = false;
   let retry = 500;
-  const url = API_BASE.replace(/^http/, 'ws') + '/ws';
+  const base = API_BASE || window.location.origin;
+  const url = base.replace(/^http/, 'ws') + '/ws';
 
   const open = () => {
     if (closed) return;

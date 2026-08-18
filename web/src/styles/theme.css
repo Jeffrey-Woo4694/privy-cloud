@@ -39,6 +39,7 @@ button { font: inherit; cursor: pointer; }
 .back-link { background: none; border: none; color: var(--accent); font-size: 13px; padding: 4px 0; }
 .editor { display: flex; flex-direction: column; height: 100%; }
 .editor-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.editor-error { color: var(--danger); font-size: 12px; margin-bottom: 8px; }
 .editor textarea { flex: 1; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 14px; padding: 10px; resize: none; outline: none; }
 .viewer { display: flex; flex-direction: column; height: 100%; }
 .viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }

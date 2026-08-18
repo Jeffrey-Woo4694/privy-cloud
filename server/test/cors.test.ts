@@ -55,4 +55,16 @@ describe('cors allowlist', () => {
     expect(res.headers['access-control-allow-methods']).toContain('POST');
     await app.close();
   });
+
+  it('allows PUT in the preflight (markdown save)', async () => {
+    const app = await boot();
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/file',
+      headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'PUT', 'access-control-request-headers': 'content-type' },
+    });
+    expect(res.statusCode).toBe(204);
+    expect(res.headers['access-control-allow-methods']).toContain('PUT');
+    await app.close();
+  });
 });
