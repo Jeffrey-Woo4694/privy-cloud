@@ -12,7 +12,7 @@ import { attachSocket } from './api/socket.js';
 import { createWatcher } from './watcher.js';
 import { backfillProxies, cleanupOrphanedProxies } from './transcode.js';
 
-export async function buildApp(opts?: { root?: string }): Promise<FastifyInstance> {
+export async function buildApp(opts?: { root?: string; token?: string }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
   // CORS allowlist so BOTH documented launch paths work cross-origin:
@@ -43,6 +43,20 @@ export async function buildApp(opts?: { root?: string }): Promise<FastifyInstanc
   const ephemeral = Boolean(opts?.root);
   const cfg = opts?.root ? { root: opts.root } : await loadConfig();
   await initRootStructure(cfg.root);
+
+  // Auth layer: every /api/* and /ws request must present a matching bearer token.
+  // Static assets (/, /assets/*) and /api/health stay public — the frontend probes
+  // reachability via /api/health before login. CORS preflights (OPTIONS) are
+  // terminated by @fastify/cors's own onRequest hook, so they never reach here.
+  const authToken = opts?.token ?? (await loadConfig()).token;
+  app.addHook('onRequest', async (req, reply) => {
+    const path = req.url.split('?')[0];
+    if (!path.startsWith('/api') && !path.startsWith('/ws')) return;
+    if (path === '/api/health') return;
+    const got = req.headers.authorization?.replace(/^Bearer\s+/i, '')
+      ?? (req.query as Record<string, string | undefined>).token;
+    if (got !== authToken) return reply.code(401).send({ error: 'unauthorized' });
+  });
 
   // Permission layer: every API request passes through checkPermission. v1 = single owner, always allows.
   app.addHook('onRequest', async (req, reply) => {

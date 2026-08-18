@@ -8,10 +8,14 @@ import { initRootStructure } from '../src/directory.js';
 let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+// Task 2: the server now enforces a bearer token on /api/*. Inject a matching one.
+const TOKEN = 'test-token';
+const AUTH = { authorization: `Bearer ${TOKEN}` };
+
 async function boot() {
   root = mkdtempSync(join(tmpdir(), 'privy-api-'));
   await initRootStructure(root);
-  const app = await buildApp({ root });
+  const app = await buildApp({ root, token: TOKEN });
   return app;
 }
 
@@ -21,17 +25,17 @@ describe('api', () => {
     const health = await app.inject({ method: 'GET', url: '/api/health' });
     expect(health.json()).toEqual({ ok: true });
 
-    const meta = await app.inject({ method: 'GET', url: '/api/meta' });
+    const meta = await app.inject({ method: 'GET', url: '/api/meta', headers: AUTH });
     expect(meta.json().root).toBe(root);
 
     mkdirSync(join(root, 'Privy Cloud', 'Markdown'), { recursive: true });
     writeFileSync(join(root, 'Privy Cloud', 'Markdown', 'note.md'), '# hi');
-    const items = await app.inject({ method: 'GET', url: '/api/items' });
+    const items = await app.inject({ method: 'GET', url: '/api/items', headers: AUTH });
     expect(items.json().map((i: { path: string }) => i.path)).toContain('Markdown/note.md');
 
     mkdirSync(join(root, 'Privy Cloud', 'Images'), { recursive: true });
     writeFileSync(join(root, 'Privy Cloud', 'Images', 'pic.png'), 'x');
-    const img = await app.inject({ method: 'GET', url: '/api/items?kind=image' });
+    const img = await app.inject({ method: 'GET', url: '/api/items?kind=image', headers: AUTH });
     expect(img.json().map((i: { path: string }) => i.path)).toContain('Images/pic.png');
     expect(img.json().every((i: { kind: string }) => i.kind === 'image')).toBe(true);
     expect(img.json().map((i: { path: string }) => i.path)).not.toContain('Markdown/note.md');
@@ -40,25 +44,25 @@ describe('api', () => {
 
   it('send text -> chat entry -> file readable and editable', async () => {
     const app = await boot();
-    const sent = await app.inject({ method: 'POST', url: '/api/send/text', payload: { text: 'hello privy' } });
+    const sent = await app.inject({ method: 'POST', url: '/api/send/text', payload: { text: 'hello privy' }, headers: AUTH });
     expect(sent.statusCode).toBe(200);
     const entry = sent.json().entry as { path: string };
     expect(entry.path).toMatch(/^Markdown\//);
 
-    const chat = await app.inject({ method: 'GET', url: '/api/chat' });
+    const chat = await app.inject({ method: 'GET', url: '/api/chat', headers: AUTH });
     expect(chat.json()[0].path).toBe(entry.path);
 
-    const saved = await app.inject({ method: 'PUT', url: `/api/file?path=${encodeURIComponent(entry.path)}`, payload: { content: 'edited' } });
+    const saved = await app.inject({ method: 'PUT', url: `/api/file?path=${encodeURIComponent(entry.path)}`, payload: { content: 'edited' }, headers: AUTH });
     expect(saved.statusCode).toBe(200);
 
-    const got = await app.inject({ method: 'GET', url: `/api/file?path=${encodeURIComponent(entry.path)}` });
+    const got = await app.inject({ method: 'GET', url: `/api/file?path=${encodeURIComponent(entry.path)}`, headers: AUTH });
     expect(got.body).toBe('edited');
     await app.close();
   });
 
   it('rejects path traversal on file access', async () => {
     const app = await boot();
-    const bad = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('../secret.txt') });
+    const bad = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('../secret.txt'), headers: AUTH });
     expect(bad.statusCode).toBe(400);
     await app.close();
   });
@@ -91,7 +95,7 @@ describe('api', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/send/folder',
-      headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      headers: { ...AUTH, 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
       payload: body,
     });
     expect(res.statusCode).toBe(200);
@@ -120,7 +124,7 @@ describe('api', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/send/file',
-      headers: { 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      headers: { ...AUTH, 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
       payload,
     });
     expect(res.statusCode).toBe(200);
@@ -135,7 +139,7 @@ describe('api', () => {
   it('setRoot re-inits the new root', async () => {
     const app = await boot();
     const newRoot = mkdtempSync(join(tmpdir(), 'privy-new-'));
-    const res = await app.inject({ method: 'PUT', url: '/api/settings/root', payload: { path: newRoot } });
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/root', payload: { path: newRoot }, headers: AUTH });
     expect(res.statusCode).toBe(200);
     expect(res.json().root).toBe(newRoot);
     await app.close();
@@ -146,7 +150,7 @@ describe('api', () => {
     const before = existsSync(configFile) ? readFileSync(configFile, 'utf8') : null;
     const app = await boot();
     const newRoot = mkdtempSync(join(tmpdir(), 'privy-new-'));
-    const res = await app.inject({ method: 'PUT', url: '/api/settings/root', payload: { path: newRoot } });
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/root', payload: { path: newRoot }, headers: AUTH });
     expect(res.statusCode).toBe(200);
     expect(res.json().root).toBe(newRoot);
     await app.close();
@@ -158,6 +162,8 @@ describe('api', () => {
   it('serves the web build from PRIVY_WEB_DIST and keeps /api 404s as JSON', async () => {
     const webDist = mkdtempSync(join(tmpdir(), 'privy-web-'));
     writeFileSync(join(webDist, 'index.html'), '<!doctype html><title>privy</title>');
+    mkdirSync(join(webDist, 'assets'));
+    writeFileSync(join(webDist, 'assets', 'app.js'), 'console.log(1)');
     const prev = process.env.PRIVY_WEB_DIST;
     process.env.PRIVY_WEB_DIST = webDist;
     try {
@@ -165,7 +171,10 @@ describe('api', () => {
       const page = await app.inject({ method: 'GET', url: '/' });
       expect(page.statusCode).toBe(200);
       expect(page.body).toContain('<title>privy</title>');
-      const missing = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
+      // Static assets stay public under the auth hook.
+      const asset = await app.inject({ method: 'GET', url: '/assets/app.js' });
+      expect(asset.statusCode).toBe(200);
+      const missing = await app.inject({ method: 'GET', url: '/api/does-not-exist', headers: AUTH });
       expect(missing.statusCode).toBe(404);
       expect(missing.json()).toEqual({ error: 'not found' });
       await app.close();

@@ -8,10 +8,15 @@ import { initRootStructure } from '../src/directory.js';
 let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+// Task 2: the server enforces a bearer token on /api/*. /api/health stays public
+// and OPTIONS preflights are answered by @fastify/cors before the auth hook, but
+// pass the token anyway so these tests stay green regardless of hook ordering.
+const AUTH = { authorization: 'Bearer test-token' };
+
 async function boot() {
   root = mkdtempSync(join(tmpdir(), 'privy-cors-'));
   await initRootStructure(root);
-  const app = await buildApp({ root });
+  const app = await buildApp({ root, token: 'test-token' });
   return app;
 }
 
@@ -25,7 +30,7 @@ const ALLOWED = [
 describe('cors allowlist', () => {
   it.each(ALLOWED)('echoes access-control-allow-origin for allowed origin %s', async (origin) => {
     const app = await boot();
-    const res = await app.inject({ method: 'GET', url: '/api/health', headers: { origin } });
+    const res = await app.inject({ method: 'GET', url: '/api/health', headers: { ...AUTH, origin } });
     expect(res.statusCode).toBe(200);
     expect(res.headers['access-control-allow-origin']).toBe(origin);
     await app.close();
@@ -36,7 +41,7 @@ describe('cors allowlist', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/api/health',
-      headers: { origin: 'http://evil.example' },
+      headers: { ...AUTH, origin: 'http://evil.example' },
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
@@ -48,7 +53,7 @@ describe('cors allowlist', () => {
     const res = await app.inject({
       method: 'OPTIONS',
       url: '/api/health',
-      headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'POST' },
+      headers: { ...AUTH, origin: 'http://localhost:5173', 'access-control-request-method': 'POST' },
     });
     expect(res.statusCode).toBe(204);
     expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173');
@@ -61,7 +66,7 @@ describe('cors allowlist', () => {
     const res = await app.inject({
       method: 'OPTIONS',
       url: '/api/file',
-      headers: { origin: 'http://localhost:5173', 'access-control-request-method': 'PUT', 'access-control-request-headers': 'content-type' },
+      headers: { ...AUTH, origin: 'http://localhost:5173', 'access-control-request-method': 'PUT', 'access-control-request-headers': 'content-type' },
     });
     expect(res.statusCode).toBe(204);
     expect(res.headers['access-control-allow-methods']).toContain('PUT');
