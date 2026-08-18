@@ -12,10 +12,12 @@ import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
 import { ensureProxy } from '../transcode.js';
+import type { AgentEvent } from '../hermes/events.js';
 
 export type ServerEvent =
   | { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' }
-  | { type: 'chat:new'; entry: ChatEntry };
+  | { type: 'chat:new'; entry: ChatEntry }
+  | { type: 'hermes:event'; event: AgentEvent; sessionId: string | null };
 
 export interface ApiContext {
   getRoot(): string;

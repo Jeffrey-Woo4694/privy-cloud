@@ -11,6 +11,7 @@ import { registerRoutes, type ApiContext, type ServerEvent } from './api/routes.
 import { attachSocket } from './api/socket.js';
 import { createWatcher } from './watcher.js';
 import { backfillProxies, cleanupOrphanedProxies } from './transcode.js';
+import { createHermesManager } from './hermes/manager.js';
 
 export async function buildApp(opts?: { root?: string; token?: string }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -89,6 +90,22 @@ export async function buildApp(opts?: { root?: string; token?: string }): Promis
   // Watch the root and emit filesystem changes as ServerEvents broadcast over /ws.
   const watcher = await createWatcher(cfg.root, (e) => ctx.emit(e));
   app.addHook('onClose', async () => { await watcher.stop(); });
+
+  // Hermes Agent manager: supervises the local `hermes serve` subprocess and
+  // forwards its gateway events onto the /ws ServerEvent bus. Constructed here
+  // (not after buildApp) because it needs ctx.emit and app.addHook. Failures
+  // never throw out of start()/the reconnect loop, so a missing or broken
+  // `hermes` binary cannot break the rest of the server. Skipped under vitest
+  // (NODE_ENV=test) so unrelated server tests don't spawn a real hermes — Task
+  // 9 adds explicit test injection (opts.hermes).
+  if (process.env.HERMES_ENABLED !== '0' && process.env.NODE_ENV !== 'test') {
+    const hermes = createHermesManager(process.env.HERMES_BIN ?? 'hermes');
+    hermes.start();
+    hermes.onEvent((e) => {
+      if (e.kind === 'event') ctx.emit({ type: 'hermes:event', event: e.event, sessionId: e.sessionId });
+    });
+    app.addHook('onClose', () => hermes.stop());
+  }
 
   // Remove proxies for videos deleted on-disk, then backfill proxies for HEVC videos already
   // in the vault (and recover interrupted transcodes). Fire-and-forget; new uploads trigger
