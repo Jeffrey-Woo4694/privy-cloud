@@ -13,16 +13,19 @@ import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
 import { ensureProxy } from '../transcode.js';
 import type { AgentEvent } from '../hermes/events.js';
+import type { HermesManager, HermesStatus } from '../hermes/manager.js';
 
 export type ServerEvent =
   | { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' }
   | { type: 'chat:new'; entry: ChatEntry }
-  | { type: 'hermes:event'; event: AgentEvent; sessionId: string | null };
+  | { type: 'hermes:event'; event: AgentEvent; sessionId: string | null }
+  | { type: 'hermes:status'; status: HermesStatus };
 
 export interface ApiContext {
   getRoot(): string;
   setRootPath(p: string): Promise<string>;
   emit(e: ServerEvent): void;
+  hermes?: HermesManager;
 }
 
 const MIME: Record<string, string> = {
@@ -170,5 +173,16 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
   app.get('/api/chat', async (req) => {
     const limit = Number((req.query as { limit?: string }).limit ?? 50);
     return readEntries(ctx.getRoot(), limit);
+  });
+
+  app.post('/api/hermes/call', async (req, reply) => {
+    const { method, params } = (req.body ?? {}) as { method?: string; params?: unknown };
+    if (!ctx.hermes) return reply.code(503).send({ error: 'hermes not connected' });
+    try {
+      const result = await ctx.hermes.call(method ?? '', params);
+      return { result };
+    } catch {
+      return reply.code(503).send({ error: 'hermes not connected' });
+    }
   });
 }

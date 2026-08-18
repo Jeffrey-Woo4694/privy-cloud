@@ -3,7 +3,11 @@ import { API_BASE } from './api';
 import { getToken } from './auth';
 
 export type ItemsEvent = { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' };
-export interface WsCallbacks { onItemsChanged?: (e: ItemsEvent) => void; onChatNew?: (entry: ChatEntry) => void }
+export interface WsCallbacks {
+  onItemsChanged?: (e: ItemsEvent) => void;
+  onChatNew?: (entry: ChatEntry) => void;
+  onHermesEvent?: (e: { event: any; sessionId: string | null }) => void;
+}
 
 export function connect(callbacks: WsCallbacks): () => void {
   let ws: WebSocket | undefined;
@@ -18,9 +22,15 @@ export function connect(callbacks: WsCallbacks): () => void {
     ws = new WebSocket(url);
     ws.onopen = () => { retry = 500; };
     ws.onmessage = (msg) => {
-      const data = JSON.parse(msg.data as string) as ItemsEvent | { type: 'chat:new'; entry: ChatEntry };
+      const data = JSON.parse(msg.data as string) as
+        | ItemsEvent
+        | { type: 'chat:new'; entry: ChatEntry }
+        | { type: 'hermes:event'; event: any; sessionId: string | null }
+        | { type: 'hermes:status'; status: string };
       if (data.type === 'items:changed') callbacks.onItemsChanged?.(data);
       if (data.type === 'chat:new') callbacks.onChatNew?.(data.entry);
+      if (data.type === 'hermes:event') callbacks.onHermesEvent?.({ event: data.event, sessionId: data.sessionId });
+      if (data.type === 'hermes:status') callbacks.onHermesEvent?.({ event: data, sessionId: null });
     };
     ws.onclose = () => { if (closed) return; setTimeout(open, retry); retry = Math.min(retry * 2, 10_000); };
     ws.onerror = () => ws?.close();

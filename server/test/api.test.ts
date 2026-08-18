@@ -4,6 +4,7 @@ import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/index.js';
 import { initRootStructure } from '../src/directory.js';
+import type { HermesManager } from '../src/hermes/manager.js';
 
 let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -13,6 +14,8 @@ const TOKEN = 'test-token';
 const AUTH = { authorization: `Bearer ${TOKEN}` };
 
 async function boot() {
+  // Don't spawn a real `hermes` child for these HTTP tests (Task 9 R4).
+  process.env.HERMES_ENABLED = '0';
   root = mkdtempSync(join(tmpdir(), 'privy-api-'));
   await initRootStructure(root);
   const app = await buildApp({ root, token: TOKEN });
@@ -182,5 +185,47 @@ describe('api', () => {
       if (prev === undefined) delete process.env.PRIVY_WEB_DIST; else process.env.PRIVY_WEB_DIST = prev;
       rmSync(webDist, { recursive: true, force: true });
     }
+  });
+
+  it('POST /api/hermes/call returns the manager result when connected', async () => {
+    const calls: Array<{ method: string; params: unknown }> = [];
+    const stub: HermesManager = {
+      start: () => {},
+      async call(method, params) {
+        calls.push({ method, params });
+        return { echoed: { method, params } };
+      },
+      getStatus: () => 'connected',
+      async stop() {},
+      onEvent: () => {},
+    };
+    root = mkdtempSync(join(tmpdir(), 'privy-api-'));
+    await initRootStructure(root);
+    const app = await buildApp({ root, token: TOKEN, hermes: stub });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/hermes/call',
+      payload: { method: 'session.info', params: { session_id: 'abc' } },
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ result: { echoed: { method: 'session.info', params: { session_id: 'abc' } } } });
+    expect(calls).toEqual([{ method: 'session.info', params: { session_id: 'abc' } }]);
+    await app.close();
+  });
+
+  it('POST /api/hermes/call returns 503 when the manager is not connected', async () => {
+    // No hermes injected; HERMES_ENABLED=0 means the real manager never started,
+    // so its call() rejects with "hermes not connected".
+    const app = await boot();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/hermes/call',
+      payload: { method: 'session.info', params: {} },
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ error: 'hermes not connected' });
+    await app.close();
   });
 });

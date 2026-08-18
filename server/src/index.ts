@@ -11,9 +11,9 @@ import { registerRoutes, type ApiContext, type ServerEvent } from './api/routes.
 import { attachSocket } from './api/socket.js';
 import { createWatcher } from './watcher.js';
 import { backfillProxies, cleanupOrphanedProxies } from './transcode.js';
-import { createHermesManager } from './hermes/manager.js';
+import { createHermesManager, type HermesManager } from './hermes/manager.js';
 
-export async function buildApp(opts?: { root?: string; token?: string }): Promise<FastifyInstance> {
+export async function buildApp(opts?: { root?: string; token?: string; hermes?: HermesManager }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
   // CORS allowlist so BOTH documented launch paths work cross-origin:
@@ -66,11 +66,19 @@ export async function buildApp(opts?: { root?: string; token?: string }): Promis
     }
   });
 
+  // Hermes Agent manager: supervises the local `hermes serve` subprocess and
+  // forwards its gateway events onto the /ws ServerEvent bus. Constructed
+  // unconditionally (cheap — it only builds closures) and injected into ctx so
+  // the /api/hermes/call route can reach it. Tests may inject a stub via
+  // opts.hermes, which also suppresses start().
+  const hermes = opts?.hermes ?? createHermesManager(process.env.HERMES_BIN ?? 'hermes');
+
   const listeners: Array<(e: ServerEvent) => void> = [];
   const ctx: ApiContext = {
     getRoot: () => cfg.root,
     setRootPath: async (p) => { const r = ephemeral ? resolve(p) : await setRoot(p); cfg.root = r; return r; },
     emit: (e) => { for (const l of listeners) l(e); },
+    hermes,
   };
 
   // Serve the built web frontend (web/dist) when present, so one URL exposes UI + API.
@@ -91,21 +99,16 @@ export async function buildApp(opts?: { root?: string; token?: string }): Promis
   const watcher = await createWatcher(cfg.root, (e) => ctx.emit(e));
   app.addHook('onClose', async () => { await watcher.stop(); });
 
-  // Hermes Agent manager: supervises the local `hermes serve` subprocess and
-  // forwards its gateway events onto the /ws ServerEvent bus. Constructed here
-  // (not after buildApp) because it needs ctx.emit and app.addHook. Failures
-  // never throw out of start()/the reconnect loop, so a missing or broken
-  // `hermes` binary cannot break the rest of the server. Skipped under vitest
-  // (NODE_ENV=test) so unrelated server tests don't spawn a real hermes — Task
-  // 9 adds explicit test injection (opts.hermes).
-  if (process.env.HERMES_ENABLED !== '0' && process.env.NODE_ENV !== 'test') {
-    const hermes = createHermesManager(process.env.HERMES_BIN ?? 'hermes');
-    hermes.start();
-    hermes.onEvent((e) => {
-      if (e.kind === 'event') ctx.emit({ type: 'hermes:event', event: e.event, sessionId: e.sessionId });
-    });
-    app.addHook('onClose', () => hermes.stop());
-  }
+  // Relay hermes gateway events onto the /ws ServerEvent bus. Failures never
+  // throw out of start()/the reconnect loop, so a missing or broken `hermes`
+  // binary cannot break the rest of the server. Only auto-start the real child
+  // when a manager wasn't injected (tests stub opts.hermes) and the process
+  // gate HERMES_ENABLED != 0 is set.
+  hermes.onEvent((e) => {
+    if (e.kind === 'event') ctx.emit({ type: 'hermes:event', event: e.event, sessionId: e.sessionId });
+  });
+  app.addHook('onClose', () => hermes.stop());
+  if (!opts?.hermes && process.env.HERMES_ENABLED !== '0') hermes.start();
 
   // Remove proxies for videos deleted on-disk, then backfill proxies for HEVC videos already
   // in the vault (and recover interrupted transcodes). Fire-and-forget; new uploads trigger

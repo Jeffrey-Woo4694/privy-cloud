@@ -10,6 +10,8 @@ let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 async function boot() {
+  // Don't spawn a real `hermes` child for these HTTP tests (Task 9 R4).
+  process.env.HERMES_ENABLED = '0';
   root = mkdtempSync(join(tmpdir(), 'privy-auth-'));
   await initRootStructure(root);
   return buildApp({ root, token: 'test-token-123' });

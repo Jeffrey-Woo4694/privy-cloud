@@ -14,6 +14,8 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 const AUTH = { authorization: 'Bearer test-token' };
 
 async function boot() {
+  // Don't spawn a real `hermes` child for these HTTP tests (Task 9 R4).
+  process.env.HERMES_ENABLED = '0';
   root = mkdtempSync(join(tmpdir(), 'privy-cors-'));
   await initRootStructure(root);
   const app = await buildApp({ root, token: 'test-token' });
