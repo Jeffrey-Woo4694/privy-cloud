@@ -34,8 +34,12 @@ function MessageView({ msg }: { msg: Message }) {
 }
 
 export function HermesTab() {
-  const { state, send, stop, undo } = useHermes();
+  const { state, send, stop, undo, sessions, newSession, resume } = useHermes();
   const [text, setText] = useState('');
+
+  // The current session is the row whose durable key (or live id) matches
+  // `state.sessionKey` — the id `session.list` keys entries by.
+  const activeSessionId = state.sessionKey ?? state.sessionId;
 
   // Enter always sends — `send()` itself routes to session.steer when the
   // agent is mid-turn. The Stop button (below) is the explicit interrupt path.
@@ -55,26 +59,65 @@ export function HermesTab() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="panel-title">Hermes Agent</div>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        {state.messages.length === 0 && (
-          <div className="empty-state">Ask your local Hermes agent anything.</div>
+    <div style={{ display: 'flex', height: '100%' }}>
+      <aside
+        style={{
+          width: 220,
+          flexShrink: 0,
+          borderRight: '1px solid var(--border)',
+          padding: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          overflowY: 'auto',
+        }}
+      >
+        <button className="btn primary" onClick={newSession}>＋ New session</button>
+        {sessions.length === 0 && (
+          <div style={{ color: 'var(--muted)', fontSize: 12, padding: '4px 2px' }}>No sessions yet.</div>
         )}
-        {state.messages.map((m) => <MessageView key={m.id} msg={m} />)}
-      </div>
-      {state.status && <div style={{ color: 'var(--muted)', fontSize: 11, padding: '4px 2px' }}>{state.status}</div>}
-      <div className="send-input">
-        <input
-          value={text}
-          placeholder="Ask Hermes…"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submitText(); }}
-        />
-        <button className="btn" aria-label="undo" onClick={undo}>↩️</button>
-        <button className="btn primary" onClick={onButtonClick}>
-          {state.streaming ? 'Stop' : 'Send'}
-        </button>
+        {sessions.map((s) => {
+          const active = s.id === activeSessionId;
+          return (
+            <button
+              key={s.id}
+              className="btn"
+              onClick={() => resume(s.id)}
+              aria-pressed={active}
+              style={{
+                textAlign: 'left',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                ...(active ? { background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600 } : {}),
+              }}
+            >
+              {s.title}
+            </button>
+          );
+        })}
+      </aside>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+        <div className="panel-title">Hermes Agent</div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {state.messages.length === 0 && (
+            <div className="empty-state">Ask your local Hermes agent anything.</div>
+          )}
+          {state.messages.map((m) => <MessageView key={m.id} msg={m} />)}
+        </div>
+        {state.status && <div style={{ color: 'var(--muted)', fontSize: 11, padding: '4px 2px' }}>{state.status}</div>}
+        <div className="send-input">
+          <input
+            value={text}
+            placeholder="Ask Hermes…"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') submitText(); }}
+          />
+          <button className="btn" aria-label="undo" onClick={undo}>↩️</button>
+          <button className="btn primary" onClick={onButtonClick}>
+            {state.streaming ? 'Stop' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   );

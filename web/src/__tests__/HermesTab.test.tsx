@@ -27,8 +27,27 @@ beforeEach(() => {
     onHermesEvent = cb.onHermesEvent;
     return () => {};
   });
-  hermesCall.mockImplementation(async (method: string) => {
+  hermesCall.mockImplementation(async (method: string, params?: { session_id?: string }) => {
     if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+    if (method === 'session.list') {
+      return {
+        sessions: [
+          { id: 'k1', title: 'Fix login test' },
+          { id: 'k2', title: '' },
+        ],
+      };
+    }
+    if (method === 'session.resume') {
+      const sid = params?.session_id ?? 'k1';
+      return {
+        session_id: `live-${sid}`,
+        session_key: sid,
+        messages: [
+          { role: 'user', text: `resumed msg for ${sid}` },
+          { role: 'assistant', text: `resumed reply for ${sid}` },
+        ],
+      };
+    }
     return {};
   });
 });
@@ -136,5 +155,52 @@ describe('HermesTab', () => {
       expect(screen.queryByText('fix it')).not.toBeInTheDocument();
       expect(screen.queryByText('done')).not.toBeInTheDocument();
     });
+  });
+
+  it('renders a New session button and lists sessions from session.list', async () => {
+    render(<HermesTab />);
+    expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
+
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.list', { limit: 200 }));
+    expect(await screen.findByRole('button', { name: /fix login test/i })).toBeInTheDocument();
+    // `session.list` keys entries by `id` (not `session_id`); an empty title
+    // falls back to the id.
+    expect(screen.getByRole('button', { name: 'k2' })).toBeInTheDocument();
+
+    // The auto-created session (durable key `k1`) is the highlighted row.
+    expect(screen.getByRole('button', { name: /fix login test/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('New session button creates a fresh session and clears the transcript', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    const input = screen.getByPlaceholderText(/Ask Hermes/);
+    fireEvent.change(input, { target: { value: 'hello' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByText('hello')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /new session/i }));
+
+    await waitFor(() => {
+      expect(hermesCall.mock.calls.filter(([m]) => m === 'session.create')).toHaveLength(2);
+    });
+    await waitFor(() => expect(screen.queryByText('hello')).not.toBeInTheDocument());
+  });
+
+  it('resumes a session from the list: calls session.resume and loads its transcript', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.list', { limit: 200 }));
+
+    const row = await screen.findByRole('button', { name: 'k2' });
+    fireEvent.click(row);
+
+    expect(hermesCall).toHaveBeenCalledWith('session.resume', { session_id: 'k2' });
+    expect(await screen.findByText('resumed msg for k2')).toBeInTheDocument();
+    expect(screen.getByText('resumed reply for k2')).toBeInTheDocument();
+
+    // The resumed session is now the highlighted row.
+    expect(screen.getByRole('button', { name: 'k2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /fix login test/i })).toHaveAttribute('aria-pressed', 'false');
   });
 });
