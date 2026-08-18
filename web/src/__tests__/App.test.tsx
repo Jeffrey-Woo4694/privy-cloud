@@ -6,8 +6,8 @@ describe('App', () => {
   beforeEach(() => localStorage.setItem('privy-token', 't'));
   it('boots into the Hermes tab', () => {
     render(<App />);
-    // The placeholder body text is unique to the Hermes tab (the tab label shares the name).
-    expect(screen.getByText(/Your local Hermes agent interaction will live here/)).toBeInTheDocument();
+    // The Hermes chat composer is unique to the Hermes tab (the tab label shares the name).
+    expect(screen.getByPlaceholderText(/Ask Hermes/)).toBeInTheDocument();
     expect(document.querySelector('.tab.active')?.textContent).toContain('Hermes Agent');
   });
 

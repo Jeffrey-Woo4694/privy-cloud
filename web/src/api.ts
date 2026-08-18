@@ -50,4 +50,6 @@ export const api = {
   setRoot: async (path: string): Promise<string> =>
     (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
   proxyUrl: (path: string): string => `${API_BASE}/api/proxy?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
+  hermesCall: (method: string, params?: unknown): Promise<unknown> =>
+    req('/api/hermes/call', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params }) }),
 };
