@@ -32,4 +32,12 @@ describe('api', () => {
     const { api } = await import('../api');
     expect(api.proxyUrl('/foo')).toContain('token=t');
   });
+
+  it('hermesCall unwraps the { result } envelope', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok({ result: { sessions: [{ id: 'a', title: 't' }] } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { api } = await import('../api');
+    const r = await api.hermesCall('session.list', { limit: 5 });
+    expect(r).toEqual({ sessions: [{ id: 'a', title: 't' }] });
+  });
 });
