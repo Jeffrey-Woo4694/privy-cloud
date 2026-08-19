@@ -5,6 +5,7 @@ import { HermesTab } from './pages/HermesTab';
 import { CodingAgentTab } from './pages/CodingAgentTab';
 import { PrivyCloudTab } from './pages/PrivyCloudTab';
 import { getToken, setToken, clearToken } from './auth';
+import { api } from './api';
 
 type Tab = 'hermes' | 'coding' | 'privy';
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -37,11 +38,29 @@ function Shell({ onLogout }: { onLogout(): void }) {
 
 export function App() {
   const [authed, setAuthed] = useState(() => !!getToken());
+  const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  const handleLogin = async (token: string) => {
+    setLoginError('');
+    setLoggingIn(true);
+    setToken(token); // so api.ts sends it
+    try {
+      await api.getMeta(); // server validates the token
+      setAuthed(true);
+    } catch {
+      clearToken();
+      setLoginError('Invalid access token');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
   return (
     <ThemeProvider>
       {authed
         ? <Shell onLogout={() => { clearToken(); setAuthed(false); }} />
-        : <LoginGate onLogin={(t) => { setToken(t); setAuthed(true); }} />}
+        : <LoginGate onLogin={(t) => void handleLogin(t)} error={loginError} busy={loggingIn} />}
     </ThemeProvider>
   );
 }

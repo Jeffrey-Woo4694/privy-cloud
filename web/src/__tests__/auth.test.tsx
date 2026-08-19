@@ -22,4 +22,14 @@ describe('auth', () => {
     fireEvent.click(screen.getByText(/unlock/i));
     expect(onLogin).toHaveBeenCalledWith('tok');
   });
+
+  it('LoginGate shows a validation error when present', () => {
+    render(<LoginGate onLogin={() => {}} error="Invalid access token" />);
+    expect(screen.getByText('Invalid access token')).toBeTruthy();
+  });
+
+  it('LoginGate disables the button while busy', () => {
+    render(<LoginGate onLogin={() => {}} busy />);
+    expect(screen.getByText(/checking/i)).toBeTruthy();
+  });
 });
