@@ -40,6 +40,18 @@ describe('config', () => {
     expect(again.token).toBe(cfg.token);
   });
 
+  it('honors a user-set custom token instead of regenerating it', async () => {
+    const home = fakeHome(); process.env.HOME = home; process.env.PRIVY_ROOT = '';
+    const cfgFile = join(home, '.privy-cloud', 'config.json');
+    mkdirSync(join(home, '.privy-cloud'), { recursive: true });
+    writeFileSync(cfgFile, JSON.stringify({ root: join(home, 'PrivyCloud'), token: '123qwe' }));
+    const cfg = await loadConfig();
+    expect(cfg.token).toBe('123qwe');
+    // Idempotent — a second load must not regenerate a random token over the user's.
+    const again = await loadConfig();
+    expect(again.token).toBe('123qwe');
+  });
+
   it('recovers from a corrupt config file instead of crashing', async () => {
     const home = fakeHome(); process.env.HOME = home; process.env.PRIVY_ROOT = '';
     const cfgFile = join(home, '.privy-cloud', 'config.json');

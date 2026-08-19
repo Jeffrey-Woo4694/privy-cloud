@@ -33,7 +33,9 @@ function readConfig(): Record<string, unknown> {
 
 function ensureToken(): string {
   const raw = readConfig();
-  if (typeof raw.token === 'string' && /^[0-9a-f]{64}$/.test(raw.token)) return raw.token;
+  // Honor whatever token the user set (any non-empty string). Only auto-generate
+  // when the field is missing/empty so a user-chosen token like "123qwe" is kept.
+  if (typeof raw.token === 'string' && raw.token.length > 0) return raw.token;
   const token = randomBytes(32).toString('hex');
   writeFileSync(CONFIG_FILE(), JSON.stringify({ ...raw, token }, null, 2));
   return token;
