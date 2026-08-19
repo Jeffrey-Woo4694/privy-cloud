@@ -18,4 +18,11 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('toggle theme'));
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
+
+  it('logs out and returns to the login gate', () => {
+    render(<App />); // token 't' is in localStorage → authed
+    fireEvent.click(screen.getByLabelText('logout'));
+    expect(localStorage.getItem('privy-token')).toBeNull();
+    expect(screen.getByPlaceholderText(/access token/i)).toBeInTheDocument();
+  });
 });

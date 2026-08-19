@@ -4,6 +4,7 @@ import { LoginGate } from './components/LoginGate';
 import { HermesTab } from './pages/HermesTab';
 import { CodingAgentTab } from './pages/CodingAgentTab';
 import { PrivyCloudTab } from './pages/PrivyCloudTab';
+import { getToken, setToken, clearToken } from './auth';
 
 type Tab = 'hermes' | 'coding' | 'privy';
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -12,7 +13,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
   { key: 'privy', label: 'Privy Cloud' },
 ];
 
-function Shell() {
+function Shell({ onLogout }: { onLogout(): void }) {
   const [tab, setTab] = useState<Tab>('hermes');
   const { theme, toggle } = useTheme();
   return (
@@ -23,6 +24,7 @@ function Shell() {
         ))}
         <span className="tab-spacer" />
         <button className="tab" onClick={toggle} aria-label="toggle theme">{theme === 'dark' ? '🌙' : '☀️'}</button>
+        <button className="tab" onClick={onLogout} aria-label="logout">Logout</button>
       </div>
       <div className="app-body">
         {tab === 'hermes' && <HermesTab />}
@@ -34,5 +36,12 @@ function Shell() {
 }
 
 export function App() {
-  return <ThemeProvider><LoginGate><Shell /></LoginGate></ThemeProvider>;
+  const [authed, setAuthed] = useState(() => !!getToken());
+  return (
+    <ThemeProvider>
+      {authed
+        ? <Shell onLogout={() => { clearToken(); setAuthed(false); }} />
+        : <LoginGate onLogin={(t) => { setToken(t); setAuthed(true); }} />}
+    </ThemeProvider>
+  );
 }

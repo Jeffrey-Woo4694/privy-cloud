@@ -1,20 +1,25 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LoginGate } from '../components/LoginGate';
-import { getToken, setToken } from '../auth';
+import { getToken, setToken, clearToken } from '../auth';
 
-describe('LoginGate', () => {
+describe('auth', () => {
   beforeEach(() => localStorage.clear());
-  it('shows the token form when no token is set', () => {
-    render(<LoginGate><div>app content</div></LoginGate>);
-    expect(screen.getByPlaceholderText(/access token/i)).toBeTruthy();
-    expect(screen.queryByText('app content')).toBeNull();
+
+  it('getToken/setToken/clearToken roundtrip', () => {
+    expect(getToken()).toBeNull();
+    setToken('abc');
+    expect(getToken()).toBe('abc');
+    clearToken();
+    expect(getToken()).toBeNull();
   });
-  it('stores the token and reveals children', () => {
-    render(<LoginGate><div>app content</div></LoginGate>);
+
+  it('LoginGate renders the form and calls onLogin with the entered token', () => {
+    const onLogin = vi.fn();
+    render(<LoginGate onLogin={onLogin} />);
+    expect(screen.getByPlaceholderText(/access token/i)).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText(/access token/i), { target: { value: 'tok' } });
     fireEvent.click(screen.getByText(/unlock/i));
-    expect(getToken()).toBe('tok');
-    expect(screen.getByText('app content')).toBeTruthy();
+    expect(onLogin).toHaveBeenCalledWith('tok');
   });
 });
