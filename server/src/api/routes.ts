@@ -177,12 +177,20 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
 
   app.post('/api/hermes/call', async (req, reply) => {
     const { method, params } = (req.body ?? {}) as { method?: string; params?: unknown };
-    if (!ctx.hermes) return reply.code(503).send({ error: 'hermes not connected' });
+    const hermes = ctx.hermes;
+    // "Not connected" is a distinct, deterministic outcome: no manager, or a
+    // manager whose lifecycle hasn't reached 'connected' (spawn/connect in
+    // progress, or down). Any *other* rejection from call() is the call itself
+    // failing, and is surfaced as-is (502) rather than conflated with a
+    // connectivity problem.
+    if (!hermes) return reply.code(503).send({ error: 'hermes not connected' });
+    if (hermes.getStatus() !== 'connected') return reply.code(503).send({ error: 'hermes not connected' });
     try {
-      const result = await ctx.hermes.call(method ?? '', params);
+      const result = await hermes.call(method ?? '', params);
       return { result };
-    } catch {
-      return reply.code(503).send({ error: 'hermes not connected' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(502).send({ error: message });
     }
   });
 }

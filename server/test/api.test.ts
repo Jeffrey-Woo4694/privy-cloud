@@ -216,7 +216,7 @@ describe('api', () => {
 
   it('POST /api/hermes/call returns 503 when the manager is not connected', async () => {
     // No hermes injected; HERMES_ENABLED=0 means the real manager never started,
-    // so its call() rejects with "hermes not connected".
+    // so its status stays 'disconnected'.
     const app = await boot();
     const res = await app.inject({
       method: 'POST',
@@ -226,6 +226,28 @@ describe('api', () => {
     });
     expect(res.statusCode).toBe(503);
     expect(res.json()).toEqual({ error: 'hermes not connected' });
+    await app.close();
+  });
+
+  it('POST /api/hermes/call returns 502 with the underlying error when a connected call fails', async () => {
+    const stub: HermesManager = {
+      start: () => {},
+      async call() { throw new Error('boom: model exploded'); },
+      getStatus: () => 'connected',
+      async stop() {},
+      onEvent: () => {},
+    };
+    root = mkdtempSync(join(tmpdir(), 'privy-api-'));
+    await initRootStructure(root);
+    const app = await buildApp({ root, token: TOKEN, hermes: stub });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/hermes/call',
+      payload: { method: 'session.info', params: {} },
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: 'boom: model exploded' });
     await app.close();
   });
 });

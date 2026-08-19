@@ -122,6 +122,12 @@ export async function buildApp(opts?: { root?: string; token?: string; hermes?: 
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1])) {
+  // Spec §2.1: the access token is printed once at startup. loadConfig() (called
+  // again inside buildApp) generates and persists the token on first boot, so a
+  // fresh user always sees it here — the single place it's surfaced to them.
+  const entryCfg = await loadConfig();
+  // eslint-disable-next-line no-console
+  console.log('Privy Cloud access token:', entryCfg.token);
   const app = await buildApp();
   await app.listen({ port: Number(process.env.PRIVY_PORT ?? 5178), host: process.env.PRIVY_HOST ?? '127.0.0.1' });
 }

@@ -12,6 +12,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
       <input placeholder="Access token" value={token} onChange={(e) => setTok(e.target.value)}
         style={{ width: 300, padding: 8, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--inputbg)', color: 'var(--text)' }} />
       <button className="btn primary" onClick={() => { setToken(token); setStored(token); }}>Unlock</button>
+      <div style={{ color: 'var(--muted)', fontSize: 12 }}>Token is in ~/.privy-cloud/config.json</div>
     </div>
   );
 }

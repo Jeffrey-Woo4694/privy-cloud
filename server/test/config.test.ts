@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, setRoot } from '../src/config.js';
@@ -38,5 +38,22 @@ describe('config', () => {
     // A second load returns the same token (idempotent).
     const again = await loadConfig();
     expect(again.token).toBe(cfg.token);
+  });
+
+  it('recovers from a corrupt config file instead of crashing', async () => {
+    const home = fakeHome(); process.env.HOME = home; process.env.PRIVY_ROOT = '';
+    const cfgFile = join(home, '.privy-cloud', 'config.json');
+    mkdirSync(join(home, '.privy-cloud'), { recursive: true });
+    writeFileSync(cfgFile, '{not valid json');
+    const cfg = await loadConfig();
+    expect(cfg.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(cfg.root).toBe(join(home, 'PrivyCloud'));
+    // A subsequent corrupt file also survives setRoot (falls back to {} and
+    // merges only the new root in).
+    writeFileSync(cfgFile, 'also not json');
+    const target = join(tmpdir(), 'my-data-dir');
+    const got = await setRoot(target);
+    expect(got).toBe(target);
+    expect(JSON.parse(readFileSync(cfgFile, 'utf8')).root).toBe(target);
   });
 });

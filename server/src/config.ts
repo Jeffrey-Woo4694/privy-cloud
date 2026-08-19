@@ -17,9 +17,23 @@ export function ensureHomeConfig(): void {
   }
 }
 
+/// Read the config file as a plain object. A corrupt/unparseable file (or a
+/// non-object JSON value) falls back to `{}` so startup and token/setRoot
+/// regeneration never crash on a bad file.
+function readConfig(): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(CONFIG_FILE(), 'utf8'));
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 function ensureToken(): string {
-  const raw = JSON.parse(readFileSync(CONFIG_FILE(), 'utf8')) as { token?: string };
-  if (raw.token && /^[0-9a-f]{64}$/.test(raw.token)) return raw.token;
+  const raw = readConfig();
+  if (typeof raw.token === 'string' && /^[0-9a-f]{64}$/.test(raw.token)) return raw.token;
   const token = randomBytes(32).toString('hex');
   writeFileSync(CONFIG_FILE(), JSON.stringify({ ...raw, token }, null, 2));
   return token;
@@ -30,15 +44,16 @@ export async function loadConfig(): Promise<AppConfig> {
   const token = ensureToken();
   const env = process.env.PRIVY_ROOT;
   if (env) return { root: resolve(env), owner: OWNER, token };
-  const raw = JSON.parse(readFileSync(CONFIG_FILE(), 'utf8')) as { root?: string };
-  return { root: resolve(raw.root ?? DEFAULT_ROOT()), owner: OWNER, token };
+  const raw = readConfig();
+  const rootVal = raw.root;
+  return { root: resolve(typeof rootVal === 'string' ? rootVal : DEFAULT_ROOT()), owner: OWNER, token };
 }
 
 export async function setRoot(path: string): Promise<string> {
   ensureHomeConfig();
   const abs = resolve(path);
   // Merge into the existing JSON so a persisted token (or other fields) is never clobbered.
-  const raw = JSON.parse(readFileSync(CONFIG_FILE(), 'utf8')) as Record<string, unknown>;
+  const raw = readConfig();
   writeFileSync(CONFIG_FILE(), JSON.stringify({ ...raw, root: abs }, null, 2));
   return abs;
 }

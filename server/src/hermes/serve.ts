@@ -99,6 +99,14 @@ export function spawnServe(
 
     const rl = createInterface({ input: stdout });
 
+    // A pipe read error must not become an unhandled 'error' crash (which would
+    // take down the whole backend). Readline forwards input-stream errors here,
+    // but attach a listener on both so either surface is covered. A read error
+    // before the ready line is treated like any other stall: the ready-timeout
+    // below fires and rejects.
+    rl.on('error', () => { /* ignore — the ready timeout owns the outcome */ });
+    stdout.on('error', () => { /* ignore — the ready timeout owns the outcome */ });
+
     function cleanup() {
       clearTimeout(timer);
       rl.close();

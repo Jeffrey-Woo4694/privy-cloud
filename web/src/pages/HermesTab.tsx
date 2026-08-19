@@ -46,8 +46,10 @@ export function HermesTab() {
   const submitText = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    send(trimmed);
-    setText('');
+    // Clear the input only when the text was actually submitted. When there's
+    // no live session `send()` no-ops (returns false) and the draft must be
+    // preserved so it isn't silently lost.
+    if (send(trimmed)) setText('');
   };
 
   const onButtonClick = () => {

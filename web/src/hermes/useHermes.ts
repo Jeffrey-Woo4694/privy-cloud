@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { connect } from '../ws';
-import { applyAgentEvent, initialHermesState, pushUser, undoLastTurn, resyncMessages } from './reducer';
+import { applyAgentEvent, initialHermesState, pushSteer, pushUser, undoLastTurn, resyncMessages } from './reducer';
 import type { AgentEvent, HermesState, ResyncItem } from './types';
 
 interface SessionCreated {
@@ -66,7 +66,7 @@ function parseResumeMessages(result: unknown): ResyncItem[] {
 
 export function useHermes(): {
   state: HermesState;
-  send(text: string): void;
+  send(text: string): boolean;
   stop(): void;
   undo(): void;
   sessions: SessionSummary[];
@@ -118,11 +118,15 @@ export function useHermes(): {
     return disconnect;
   }, [refreshSessions]);
 
-  const send = useCallback((text: string) => {
+  const send = useCallback((text: string): boolean => {
     const { sessionId, streaming } = stateRef.current;
-    if (!sessionId) return;
-    setState((s) => pushUser(s, text));
+    if (!sessionId) return false;
+    // A mid-turn steer note is rendered distinctly from a user message (the
+    // reducer's `pushSteer` + the `'steer'` role), so route it accordingly
+    // instead of always pushing a user bubble.
+    setState((s) => (streaming ? pushSteer(s, text) : pushUser(s, text)));
     void api.hermesCall(streaming ? 'session.steer' : 'prompt.submit', { session_id: sessionId, text });
+    return true;
   }, []);
 
   const stop = useCallback(() => {

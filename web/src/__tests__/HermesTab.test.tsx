@@ -108,7 +108,7 @@ describe('HermesTab', () => {
     expect(hermesCall).toHaveBeenCalledWith('session.interrupt', { session_id: 's1' });
   });
 
-  it('steers mid-turn when streaming: Enter calls session.steer', async () => {
+  it('steers mid-turn when streaming: Enter calls session.steer and renders a steer note', async () => {
     render(<HermesTab />);
     await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
 
@@ -119,7 +119,10 @@ describe('HermesTab', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(hermesCall).toHaveBeenCalledWith('session.steer', { session_id: 's1', text: 'go faster' });
+    // The steer text is pushed via pushSteer, so it renders as a distinct
+    // steer note (with the "mid-turn steer" label), NOT a user bubble.
     expect(await screen.findByText('go faster')).toBeInTheDocument();
+    expect(screen.getByText('mid-turn steer')).toBeInTheDocument();
   });
 
   it('send() no-ops without a session (session.create failed)', async () => {
@@ -135,6 +138,8 @@ describe('HermesTab', () => {
 
     expect(hermesCall).not.toHaveBeenCalledWith('prompt.submit', expect.anything());
     expect(screen.queryByText('hi')).not.toBeInTheDocument();
+    // send() returned false (no session), so the draft input is NOT cleared.
+    expect(input).toHaveValue('hi');
   });
 
   it('undo pops the last turn and calls session.undo', async () => {

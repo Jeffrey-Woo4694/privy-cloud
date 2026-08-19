@@ -85,4 +85,11 @@ describe('events', () => {
     expect(parseAgentEvent('subagent.start', { subagent_id: 'sa2' }))
       .toEqual({ type: 'subagent.start', id: 'sa2', depth: 0, goal: '' });
   });
+
+  it('does not throw on a null/absent payload (decodeFrame yields payload: null)', () => {
+    expect(parseAgentEvent('message.delta', null)).toEqual({ type: 'message.delta', text: '' });
+    expect(parseAgentEvent('session.info', {})).toEqual({ type: 'session.info' });
+    expect(parseAgentEvent('tool.complete', null)).toEqual({ type: 'tool.complete', id: '', name: '', ok: true });
+    expect(parseAgentEvent('status.update', undefined)).toEqual({ type: 'status.update', text: '' });
+  });
 });

@@ -48,6 +48,11 @@ function asBool(v: unknown): boolean | undefined {
 }
 
 export function parseAgentEvent(eventType: string, payload: any): AgentEvent {
+  // The gateway may omit `payload` entirely (decodeFrame then hands us `null`).
+  // Coerce to `{}` before the switch so every `asStr(payload.*, …)` read below
+  // hits an object instead of dereferencing `null` (which would throw inside
+  // the ws message listener and crash the whole backend).
+  payload = payload ?? {};
   switch (eventType) {
     case 'gateway.ready':
       return { type: 'gateway.ready' };
