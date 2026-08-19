@@ -1,35 +1,39 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ChatEntry, FileItem, Kind } from '@privy/shared';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { KIND_FOLDER, type ChatEntry, type FileItem, type Kind } from '@privy/shared';
 import { api } from '../api';
 import { connect } from '../ws';
 import { KindFilter, type KindFilterValue } from '../components/KindFilter';
 import { SharingGrid } from '../components/SharingGrid';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
+import { directChildren, parentPath } from '../sharingView';
 
 export function PrivyCloudTab() {
   const [items, setItems] = useState<FileItem[]>([]);
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [kind, setKind] = useState<KindFilterValue>('all');
+  const [currentPath, setCurrentPath] = useState(''); // '' = root of Privy Cloud/
   const [selected, setSelected] = useState<FileItem | null>(null);
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
     try {
-      const [its, entries] = await Promise.all([api.listItems(kind === 'all' ? undefined : kind as Kind), api.listChat()]);
+      const [its, entries] = await Promise.all([api.listItems(), api.listChat()]);
       setItems(its); setChat(entries);
     } catch (e) { setError((e as Error).message); }
-  }, [kind]);
+  }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => {
     const disconnect = connect({
-      onItemsChanged: () => { void api.listItems(kind === 'all' ? undefined : kind as Kind).then(setItems); },
+      onItemsChanged: () => { void api.listItems().then(setItems); },
       onChatNew: (entry) => setChat((c) => [entry, ...c]),
     });
     return disconnect;
-  }, [kind]);
+  }, []);
+
+  const viewItems = useMemo(() => directChildren(items, currentPath, kind), [items, currentPath, kind]);
 
   const sendText = async (text: string) => { await api.sendText(text); void refresh(); };
   const sendFiles = async (files: File[]) => { await api.sendFiles(files); void refresh(); };
@@ -38,7 +42,24 @@ export function PrivyCloudTab() {
     const found = items.find((i) => i.path === path) ?? { name: path.split('/').pop() ?? path, path, kind: 'other' as Kind, size: 0, isDir: false, modifiedAt: '' };
     setSelected(found);
   };
-  const onSaved = async () => { await Promise.all([api.listItems(kind === 'all' ? undefined : kind as Kind).then(setItems), api.listChat().then(setChat)]); };
+  const onSaved = async () => { await Promise.all([api.listItems().then(setItems), api.listChat().then(setChat)]); };
+
+  // Navigate into/out of a directory. Kind resets to 'all' so the newly shown
+  // directory's contents are never hidden by a stale file-type filter.
+  const navigate = (path: string) => { setCurrentPath(path); setKind('all'); };
+
+  // A folder tile opens the folder; a file opens the viewer.
+  const handleTileSelect = (item: FileItem) => {
+    if (item.isDir) navigate(item.path);
+    else setSelected(item);
+  };
+
+  // At the root the kind chips jump straight into that category directory;
+  // inside a directory they filter the visible files by type.
+  const handleKind = (k: KindFilterValue) => {
+    setKind(k);
+    if (currentPath === '' && k !== 'all') setCurrentPath(KIND_FOLDER[k as Kind]);
+  };
 
   if (selected) {
     return <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} />;
@@ -48,8 +69,14 @@ export function PrivyCloudTab() {
     <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%' }}>
       <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0 }}>
         <div className="panel-title">Sharing</div>
-        <KindFilter value={kind} onChange={(k) => setKind(k)} />
-        <SharingGrid items={items} onSelect={(item) => setSelected(item)} />
+        <KindFilter value={kind} onChange={handleKind} />
+        {currentPath !== '' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <button className="back-link" onClick={() => navigate(parentPath(currentPath))}>← Back</button>
+            <span aria-label="current directory" style={{ color: 'var(--muted)', fontSize: 13, wordBreak: 'break-all' }}>{currentPath}</span>
+          </div>
+        )}
+        <SharingGrid items={viewItems} onSelect={handleTileSelect} emptyMessage={currentPath ? 'This folder is empty.' : undefined} />
       </div>
       <div className="panel" style={{ width: '30%', flexShrink: 0, padding: 12 }}>
         <ChatPanel entries={chat} onSendText={sendText} onSendFiles={sendFiles} onSendFolder={sendFolder} onOpenFile={openFile} />

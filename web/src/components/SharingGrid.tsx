@@ -10,14 +10,14 @@ function fmtSize(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function SharingGrid({ items, onSelect }: { items: FileItem[]; onSelect: (item: FileItem) => void }) {
-  if (items.length === 0) return <div className="empty-state">Nothing here yet — send something from the chat.</div>;
+export function SharingGrid({ items, onSelect, emptyMessage }: { items: FileItem[]; onSelect: (item: FileItem) => void; emptyMessage?: string }) {
+  if (items.length === 0) return <div className="empty-state">{emptyMessage ?? 'Nothing here yet — send something from the chat.'}</div>;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
       {items.map((item) => (
-        <button key={item.path} className="tile" onClick={() => onSelect(item)}>
+        <button key={item.path} className="tile" onClick={() => onSelect(item)} title={item.isDir ? `Open ${item.name}` : item.name}>
           <div className="tile-icon">{ICON[item.kind]}</div>
-          <div className="tile-name">{item.name}</div>
+          <div className="tile-name">{item.name}{item.isDir ? ' ›' : ''}</div>
           <div className="tile-meta">{fmtSize(item.size)} · {LABEL[item.kind]}</div>
         </button>
       ))}
