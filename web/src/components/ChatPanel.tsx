@@ -5,8 +5,10 @@ const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k
 
 function Entry({ entry, onOpenFile }: { entry: ChatEntry; onOpenFile: (p: string) => void }) {
   const icon = entry.kind === 'text' ? '✏️' : ICON[entry.kind] ?? '📦';
+  // A chat text entry is backed by a Markdown file (storeText writes it), so it is
+  // clickable too — clicking opens that stored file in the sharing viewer.
   const body = entry.kind === 'text'
-    ? <span>{entry.text}</span>
+    ? (entry.path ? <span className="chat-text-open" title="Open the stored file" onClick={() => onOpenFile(entry.path!)}>{entry.text}</span> : <span>{entry.text}</span>)
     : <span className="chat-fname" onClick={() => onOpenFile(entry.path!)}>{entry.name}</span>;
   return (
     <div className="chat-entry">

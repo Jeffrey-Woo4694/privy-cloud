@@ -31,6 +31,8 @@ button { font: inherit; cursor: pointer; }
 .chat-icon { font-size: 14px; background: var(--chipbg); border-radius: 5px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .chat-bubble { background: var(--bubble); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 13px; line-height: 1.45; max-width: 100%; }
 .chat-fname { color: var(--accent); font-weight: 600; }
+.chat-text-open { cursor: pointer; }
+.chat-text-open:hover { color: var(--accent); text-decoration: underline; }
 .chat-time { color: var(--muted); font-size: 11px; display: block; margin-top: 3px; }
 .send-input { margin-top: auto; display: flex; gap: 8px; align-items: center; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .send-input input { flex: 1; background: transparent; border: none; color: var(--text); outline: none; font: inherit; }

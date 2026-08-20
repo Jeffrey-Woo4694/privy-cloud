@@ -11,6 +11,14 @@ describe('ChatPanel', () => {
     expect(screen.getByText('hello')).toBeInTheDocument();
   });
 
+  it('opens the stored file when a text entry is clicked', () => {
+    const onOpenFile = vi.fn();
+    const withPath = { ...entry, path: 'Markdown/hi.md' };
+    render(<ChatPanel entries={[withPath]} onSendText={vi.fn()} onSendFiles={vi.fn()} onSendFolder={vi.fn()} onOpenFile={onOpenFile} />);
+    fireEvent.click(screen.getByText('hello'));
+    expect(onOpenFile).toHaveBeenCalledWith('Markdown/hi.md');
+  });
+
   it('sends text on Enter', () => {
     const onSendText = vi.fn();
     render(<ChatPanel entries={[]} onSendText={onSendText} onSendFiles={vi.fn()} onSendFolder={vi.fn()} onOpenFile={vi.fn()} />);

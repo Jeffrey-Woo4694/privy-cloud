@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KIND_FOLDER, type ChatEntry, type FileItem, type Kind } from '@privy/shared';
+import { KIND_FOLDER, KINDS, type ChatEntry, type FileItem, type Kind } from '@privy/shared';
 import { api } from '../api';
 import { connect } from '../ws';
 import { KindFilter, type KindFilterValue } from '../components/KindFilter';
@@ -39,7 +39,14 @@ export function PrivyCloudTab() {
   const sendFiles = async (files: File[]) => { await api.sendFiles(files); void refresh(); };
   const sendFolder = async (files: File[]) => { await api.sendFolder(files); void refresh(); };
   const openFile = (path: string) => {
-    const found = items.find((i) => i.path === path) ?? { name: path.split('/').pop() ?? path, path, kind: 'other' as Kind, size: 0, isDir: false, modifiedAt: '' };
+    const found = items.find((i) => i.path === path) ?? (() => {
+      // Fallback when the item isn't in the current listing (e.g. its file was
+      // deleted after the chat entry was created): still open with the right kind
+      // so a .md chat entry renders as markdown rather than an unknown blob.
+      const ext = path.split('.').pop()?.toLowerCase() ?? '';
+      const kind = (KINDS.find((k) => k.extensions.includes(ext))?.key ?? 'other') as Kind;
+      return { name: path.split('/').pop() ?? path, path, kind, size: 0, isDir: false, modifiedAt: '' };
+    })();
     setSelected(found);
   };
   const onSaved = async () => { await Promise.all([api.listItems().then(setItems), api.listChat().then(setChat)]); };
