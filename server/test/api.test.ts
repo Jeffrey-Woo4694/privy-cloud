@@ -229,6 +229,19 @@ describe('api', () => {
     await app.close();
   });
 
+  it('filters chat entries whose underlying file was deleted on disk', async () => {
+    const app = await boot();
+    const sent = await app.inject({ method: 'POST', url: '/api/send/text', payload: { text: 'hello', }, headers: AUTH });
+    const path = (sent.json().entry as { path: string }).path;
+    const before = await app.inject({ method: 'GET', url: '/api/chat', headers: AUTH });
+    expect(before.json().some((e: { path?: string }) => e.path === path)).toBe(true);
+    // Delete the underlying markdown file (as Hermes would) → the chat entry must vanish.
+    rmSync(join(root, 'Privy Cloud', path), { force: true });
+    const after = await app.inject({ method: 'GET', url: '/api/chat', headers: AUTH });
+    expect(after.json().some((e: { path?: string }) => e.path === path)).toBe(false);
+    await app.close();
+  });
+
   it('GET /api/hermes/roles lists the @-mentionable roles (default hermes)', async () => {
     const app = await boot();
     const res = await app.inject({ method: 'GET', url: '/api/hermes/roles', headers: AUTH });

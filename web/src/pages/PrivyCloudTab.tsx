@@ -40,7 +40,12 @@ export function PrivyCloudTab() {
 
   useEffect(() => {
     const disconnect = connect({
-      onItemsChanged: () => { void api.listItems().then(setItems); },
+      // Files change (uploads, Hermes deletions): resync BOTH the grid and the
+      // chat so entries whose file was removed disappear from the chat too.
+      onItemsChanged: () => {
+        void api.listItems().then(setItems);
+        void api.listChat().then((e) => setChat(chronological(e)));
+      },
       onChatNew: (entry) => setChat((c) => [...c, entry]), // append → newest at the bottom
       onHermesEvent: handleEvent,
     });

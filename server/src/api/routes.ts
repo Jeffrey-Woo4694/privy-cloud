@@ -173,7 +173,16 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
 
   app.get('/api/chat', async (req) => {
     const limit = Number((req.query as { limit?: string }).limit ?? 50);
-    return readEntries(ctx.getRoot(), limit);
+    const entries = await readEntries(ctx.getRoot(), limit);
+    // Keep the chat synced with reality: drop entries whose underlying file or
+    // folder was deleted on disk (e.g. by Hermes) so the chat box doesn't show
+    // messages whose content no longer exists. Plain entries without a path stay.
+    const base = privyBase(ctx.getRoot());
+    return entries.filter((e) => {
+      if (!e.path) return true;
+      const abs = resolveSafe(base, e.path);
+      return !!abs && existsSync(abs);
+    });
   });
 
   // The Hermes roles available to @-mention in the chat: the default agent
