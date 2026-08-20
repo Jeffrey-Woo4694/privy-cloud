@@ -80,4 +80,23 @@ describe('PrivyCloudTab directory browsing', () => {
     fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
     expect(screen.getByText('← Back to sharing')).toBeInTheDocument();
   });
+
+  it('keeps the chat panel visible while a file is open', async () => {
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByTitle('Open Images'));
+    fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
+    // The viewer is shown inside the sharing panel, but the right chat stays put.
+    expect(screen.getByText('← Back to sharing')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
+  });
+
+  it('returns to the grid from the viewer, keeping the chat', async () => {
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByTitle('Open Images'));
+    fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
+    fireEvent.click(screen.getByText('← Back to sharing'));
+    // Back on the grid in the current directory (Images), with the chat intact.
+    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
+  });
 });

@@ -61,22 +61,24 @@ export function PrivyCloudTab() {
     if (currentPath === '' && k !== 'all') setCurrentPath(KIND_FOLDER[k as Kind]);
   };
 
-  if (selected) {
-    return <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} />;
-  }
-
   return (
     <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%' }}>
-      <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0 }}>
-        <div className="panel-title">Sharing</div>
-        <KindFilter value={kind} onChange={handleKind} />
-        {currentPath !== '' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <button className="back-link" onClick={() => navigate(parentPath(currentPath))}>← Back</button>
-            <span aria-label="current directory" style={{ color: 'var(--muted)', fontSize: 13, wordBreak: 'break-all' }}>{currentPath}</span>
-          </div>
+      <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {selected ? (
+          <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} />
+        ) : (
+          <>
+            <div className="panel-title">Sharing</div>
+            <KindFilter value={kind} onChange={handleKind} />
+            {currentPath !== '' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <button className="back-link" onClick={() => navigate(parentPath(currentPath))}>← Back</button>
+                <span aria-label="current directory" style={{ color: 'var(--muted)', fontSize: 13, wordBreak: 'break-all' }}>{currentPath}</span>
+              </div>
+            )}
+            <SharingGrid items={viewItems} onSelect={handleTileSelect} emptyMessage={currentPath ? 'This folder is empty.' : undefined} />
+          </>
         )}
-        <SharingGrid items={viewItems} onSelect={handleTileSelect} emptyMessage={currentPath ? 'This folder is empty.' : undefined} />
       </div>
       <div className="panel" style={{ width: '30%', flexShrink: 0, padding: 12 }}>
         <ChatPanel entries={chat} onSendText={sendText} onSendFiles={sendFiles} onSendFolder={sendFolder} onOpenFile={openFile} />
