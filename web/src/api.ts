@@ -52,4 +52,5 @@ export const api = {
   proxyUrl: (path: string): string => `${API_BASE}/api/proxy?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
   hermesCall: async (method: string, params?: unknown): Promise<unknown> =>
     (await req<{ result: unknown }>('/api/hermes/call', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params }) })).result,
+  listHermesRoles: (): Promise<{ roles: { id: string; label: string }[] }> => req('/api/hermes/roles'),
 };

@@ -23,6 +23,12 @@ const SERVE_READY_TIMEOUT_MS = 30_000;
 /// via `PRIVY_HERMES_HOME`.
 const HERMES_HOME = process.env.PRIVY_HERMES_HOME ?? join(homedir(), '.privy-cloud', 'hermes-home');
 
+/// The backend's Hermes home path (the isolated copy). Exposed so the roles
+/// endpoint can read the profiles available to THIS gateway.
+export function getHermesHome(): string {
+  return HERMES_HOME;
+}
+
 /// Provision the isolated home: create the dir and seed `config.yaml` + `.env`
 /// from the standard `~/.hermes` when the isolated copies don't exist yet, so a
 /// fresh setup has a working model/provider config. Best-effort — a failure

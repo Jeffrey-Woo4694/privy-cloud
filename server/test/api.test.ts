@@ -229,6 +229,15 @@ describe('api', () => {
     await app.close();
   });
 
+  it('GET /api/hermes/roles lists the @-mentionable roles (default hermes)', async () => {
+    const app = await boot();
+    const res = await app.inject({ method: 'GET', url: '/api/hermes/roles', headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    const roles = res.json().roles as Array<{ id: string; label: string }>;
+    expect(roles.some((r) => r.id === 'hermes' && r.label === 'Hermes')).toBe(true);
+    await app.close();
+  });
+
   it('POST /api/hermes/call returns 502 with the underlying error when a connected call fails', async () => {
     const stub: HermesManager = {
       start: () => {},

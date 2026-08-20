@@ -40,6 +40,33 @@ describe('ChatPanel', () => {
     expect(onSendHermes).not.toHaveBeenCalled();
   });
 
+  it('shows the mention menu when typing @', () => {
+    render(<ChatPanel {...props} />);
+    fireEvent.change(screen.getByPlaceholderText(/Send message/), { target: { value: '@' } });
+    expect(screen.getByText('Hermes')).toBeInTheDocument();
+    expect(screen.getByText('@hermes')).toBeInTheDocument();
+  });
+
+  it('pressing Enter on the mention menu selects it and adds a trailing space', () => {
+    render(<ChatPanel {...props} />);
+    const input = screen.getByPlaceholderText(/Send message/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '@' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('@hermes ');
+  });
+
+  it('routes a message with a selected mention to the bot', () => {
+    const onSendText = vi.fn();
+    const onSendHermes = vi.fn();
+    render(<ChatPanel {...props} onSendText={onSendText} onSendHermes={onSendHermes} />);
+    const input = screen.getByPlaceholderText(/Send message/);
+    fireEvent.change(input, { target: { value: '@hermes ' } });
+    fireEvent.change(input, { target: { value: '@hermes tidy the files' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSendHermes).toHaveBeenCalledWith('@hermes tidy the files');
+    expect(onSendText).not.toHaveBeenCalled();
+  });
+
   it('renders a Hermes bot bubble (with a streaming indicator)', () => {
     render(<ChatPanel {...props} botThread={[
       { id: 'u1', role: 'user', text: '@hermes hi', streaming: false },

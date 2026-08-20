@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
@@ -14,6 +14,7 @@ import { detectKind } from '../kinds.js';
 import { ensureProxy } from '../transcode.js';
 import type { AgentEvent } from '../hermes/events.js';
 import type { HermesManager, HermesStatus } from '../hermes/manager.js';
+import { getHermesHome } from '../hermes/serve.js';
 
 export type ServerEvent =
   | { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' }
@@ -173,6 +174,25 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
   app.get('/api/chat', async (req) => {
     const limit = Number((req.query as { limit?: string }).limit ?? 50);
     return readEntries(ctx.getRoot(), limit);
+  });
+
+  // The Hermes roles available to @-mention in the chat: the default agent
+  // plus any profiles under this gateway's HERMES_HOME. Data-driven so new
+  // roles show up without a code change.
+  app.get('/api/hermes/roles', async () => {
+    const roles = [{ id: 'hermes', label: 'Hermes' }];
+    try {
+      const profilesDir = join(getHermesHome(), 'profiles');
+      if (existsSync(profilesDir)) {
+        for (const name of readdirSync(profilesDir)) {
+          if (name.startsWith('.')) continue;
+          roles.push({ id: name, label: name });
+        }
+      }
+    } catch {
+      /* best-effort — the default role always remains */
+    }
+    return { roles };
   });
 
   app.post('/api/hermes/call', async (req, reply) => {

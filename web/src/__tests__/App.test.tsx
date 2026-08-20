@@ -16,6 +16,7 @@ vi.mock('../api', () => ({
     sendFiles: vi.fn().mockResolvedValue([]),
     sendFolder: vi.fn().mockResolvedValue({}),
     hermesCall: vi.fn().mockResolvedValue({}),
+    listHermesRoles: vi.fn().mockResolvedValue({ roles: [{ id: 'hermes', label: 'Hermes' }] }),
     proxyUrl: (p: string) => p,
     setRoot: vi.fn().mockResolvedValue('/'),
   },

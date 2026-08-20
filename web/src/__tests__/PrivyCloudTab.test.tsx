@@ -26,6 +26,7 @@ vi.mock('../api', () => ({
     saveFileText: vi.fn(() => Promise.resolve({ ok: true })),
     proxyUrl: (p: string) => p,
     getMeta: vi.fn(() => Promise.resolve({ root: '/tmp/x', owner: 'owner' })),
+    listHermesRoles: vi.fn(() => Promise.resolve({ roles: [{ id: 'hermes', label: 'Hermes' }] })),
     hermesCall: vi.fn((method: string) =>
       method === 'session.create'
         ? Promise.resolve({ session_id: 's1', stored_session_id: 'k1' })

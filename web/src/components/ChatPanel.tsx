@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { KINDS, type ChatEntry, type Kind } from '@privy/shared';
 import type { PrivyBotMessage } from '../hermes/usePrivyHermes';
+import { api } from '../api';
 
 const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
+
+interface HermesRole { id: string; label: string }
+const DEFAULT_ROLES: HermesRole[] = [{ id: 'hermes', label: 'Hermes' }];
 
 function Entry({ entry, onOpenFile }: { entry: ChatEntry; onOpenFile: (p: string) => void }) {
   const icon = entry.kind === 'text' ? '✏️' : ICON[entry.kind] ?? '📦';
@@ -46,15 +50,47 @@ export function ChatPanel(props: {
   onOpenFile(p: string): void;
 }) {
   const [text, setText] = useState('');
+  const [roles, setRoles] = useState<HermesRole[]>(DEFAULT_ROLES);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // The @-mentionable roles (default agent + installed profiles). Best-effort:
+  // on failure the default role keeps working.
+  useEffect(() => {
+    api.listHermesRoles()
+      .then((r) => { if (r.roles?.length) setRoles(r.roles); })
+      .catch(() => {});
+  }, []);
 
   // Like a chat app: stay pinned to the bottom so the newest message is always in view.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [props.entries, props.botThread]);
+
+  // Mention menu: open when the text's last token starts with '@' (no space after yet).
+  const mentionMatch = /(^|\s)@([a-z0-9_-]*)$/i.exec(text);
+  const mentionOpen = !!mentionMatch;
+  const mentionPartial = mentionMatch ? mentionMatch[2] : '';
+  const filteredRoles = roles.filter((r) => r.id.toLowerCase().startsWith(mentionPartial.toLowerCase()));
+  useEffect(() => { setMentionIndex(0); }, [mentionOpen]);
+
+  const selectRole = (role: HermesRole) => {
+    setText(text.replace(/@[a-z0-9_-]*$/i, `@${role.id} `)); // @role + trailing space
+    setMentionIndex(0);
+  };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (mentionOpen && filteredRoles.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex((i) => (i + 1) % filteredRoles.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex((i) => (i - 1 + filteredRoles.length) % filteredRoles.length); return; }
+      if (e.key === 'Enter') { e.preventDefault(); selectRole(filteredRoles[mentionIndex] ?? filteredRoles[0]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setText(text.replace(/(^|\s)@[a-z0-9_-]*$/i, '$1')); return; }
+    }
+    if (e.key === 'Enter') submit(text);
+  };
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => { props.onSendFiles([...e.target.files!]); e.target.value = ''; };
   const onDir = (e: ChangeEvent<HTMLInputElement>) => { props.onSendFolder([...e.target.files!]); e.target.value = ''; };
@@ -63,8 +99,10 @@ export function ChatPanel(props: {
     const trimmed = raw.trim();
     if (!trimmed) return;
     setText('');
-    // "@hermes <task>" talks to the agent; anything else is stored as a file.
-    if (trimmed.toLowerCase().startsWith('@hermes')) props.onSendHermes(trimmed);
+    // "@<role> <task>" talks to the agent; anything else is stored as a file.
+    const mention = /^@([a-z0-9_-]+)/i.exec(trimmed);
+    const isRole = !!mention && roles.some((r) => r.id.toLowerCase() === mention[1].toLowerCase());
+    if (isRole) props.onSendHermes(trimmed);
     else props.onSendText(trimmed);
   };
 
@@ -78,14 +116,30 @@ export function ChatPanel(props: {
         {props.entries.map((e) => <Entry key={e.id} entry={e} onOpenFile={props.onOpenFile} />)}
         {props.botThread.map((m) => <BotEntry key={m.id} m={m} />)}
       </div>
-      <div className="send-input">
-        <input value={text} placeholder="Send message, file, folder, or @hermes…" onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(text); }} />
-        <button className="btn" aria-label="attach file" onClick={() => fileRef.current?.click()}>📎</button>
-        <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()}>📁</button>
-        <button className="btn primary" disabled={!text.trim()} onClick={() => submit(text)}>Send</button>
-        <input ref={fileRef} type="file" multiple hidden onChange={onFile} />
-        <input ref={dirRef} type="file" {...({ webkitdirectory: '' } as any)} multiple hidden onChange={onDir} />
+      <div style={{ position: 'relative' }}>
+        {mentionOpen && filteredRoles.length > 0 && (
+          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 6, background: 'var(--panel2)', border: '1px solid var(--border)', borderRadius: 8, maxHeight: 180, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+            {filteredRoles.map((r, i) => (
+              <div key={r.id}
+                onMouseDown={(e) => { e.preventDefault(); selectRole(r); }}
+                onMouseEnter={() => setMentionIndex(i)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer', background: i === mentionIndex ? 'var(--chipbg)' : 'transparent' }}>
+                <span>🤖</span>
+                <span style={{ fontWeight: i === mentionIndex ? 600 : 400 }}>{r.label}</span>
+                <span style={{ color: 'var(--muted)', fontSize: 12 }}>@{r.id}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="send-input">
+          <input value={text} placeholder="Send message, file, folder, or @hermes…" onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown} />
+          <button className="btn" aria-label="attach file" onClick={() => fileRef.current?.click()}>📎</button>
+          <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()}>📁</button>
+          <button className="btn primary" disabled={!text.trim()} onClick={() => submit(text)}>Send</button>
+          <input ref={fileRef} type="file" multiple hidden onChange={onFile} />
+          <input ref={dirRef} type="file" {...({ webkitdirectory: '' } as any)} multiple hidden onChange={onDir} />
+        </div>
       </div>
     </div>
   );
