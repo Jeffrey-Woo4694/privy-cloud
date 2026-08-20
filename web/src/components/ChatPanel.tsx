@@ -47,6 +47,7 @@ export function ChatPanel(props: {
   botThread: PrivyBotMessage[];
   onSendText(t: string): void;
   onSendHermes(text: string): void;
+  onNewSession(): void;
   onSendFiles(f: File[]): void;
   onSendFolder(f: File[]): void;
   onOpenFile(p: string): void;
@@ -131,11 +132,15 @@ export function ChatPanel(props: {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
         <button className={`chat-tab${activeTab === 'sharing' ? ' active' : ''}`} onClick={() => switchTab('sharing')}>Sharing</button>
         <button className={`chat-tab${activeTab === 'hermes' ? ' active' : ''}`} onClick={() => switchTab('hermes')}>
           Hermes{botUnread ? ' ●' : ''}
         </button>
+        <span style={{ flex: 1 }} />
+        {activeTab === 'hermes' && (
+          <button className="btn" title="Start a new Hermes session" onClick={props.onNewSession}>＋ New session</button>
+        )}
       </div>
       <div ref={sharingRef} style={{ flex: 1, overflowY: 'auto', display: activeTab === 'sharing' ? 'block' : 'none' }}>
         {props.entries.length === 0 && <div className="empty-state">Send a message, file, or folder to get started.</div>}

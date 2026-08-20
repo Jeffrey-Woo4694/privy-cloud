@@ -4,7 +4,7 @@ import { ChatPanel } from '../components/ChatPanel';
 import type { ChatEntry } from '@privy/shared';
 
 const entry: ChatEntry = { id: '1', ts: '2026-08-09T14:00:00Z', type: 'text', kind: 'text', name: 'hi.md', text: 'hello', sender: 'owner' };
-const props = { entries: [] as ChatEntry[], botThread: [], onSendText: vi.fn(), onSendHermes: vi.fn(), onSendFiles: vi.fn(), onSendFolder: vi.fn(), onOpenFile: vi.fn() };
+const props = { entries: [] as ChatEntry[], botThread: [], onSendText: vi.fn(), onSendHermes: vi.fn(), onNewSession: vi.fn(), onSendFiles: vi.fn(), onSendFolder: vi.fn(), onOpenFile: vi.fn() };
 
 describe('ChatPanel', () => {
   it('renders a text entry', () => {
@@ -125,6 +125,15 @@ describe('ChatPanel', () => {
     expect(onSendHermes).toHaveBeenCalledWith('@hermes hi');
     // The Hermes tab empty state is now visible (we auto-switched to it).
     expect(screen.getByText(/Message the agent below/)).toBeVisible();
+  });
+
+  it('offers a New session button only on the Hermes tab, which calls onNewSession', () => {
+    const onNewSession = vi.fn();
+    render(<ChatPanel {...props} onNewSession={onNewSession} />);
+    expect(screen.queryByRole('button', { name: /New session/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Hermes/ }));
+    fireEvent.click(screen.getByRole('button', { name: /New session/ }));
+    expect(onNewSession).toHaveBeenCalled();
   });
 
   it('on the Hermes tab, a plain message goes to the agent without @', () => {

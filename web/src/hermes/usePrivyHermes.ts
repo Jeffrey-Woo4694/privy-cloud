@@ -26,6 +26,7 @@ const nextId = (): string => `b${++counter}`;
 export function usePrivyHermes(cwd: string): {
   botThread: PrivyBotMessage[];
   sendTask(text: string): void;
+  newSession(): void;
   handleEvent(e: { event: AgentEvent; sessionId: string | null }): void;
 } {
   const [botThread, setBotThread] = useState<PrivyBotMessage[]>([]);
@@ -93,6 +94,16 @@ export function usePrivyHermes(cwd: string): {
     });
   }, [ensureSession, push]);
 
+  // Start a fresh agent conversation: forget the current (and persisted) session,
+  // clear the thread, and create a new session. The old session still exists on
+  // the gateway — it's just no longer bound to this view.
+  const newSession = useCallback(() => {
+    sessionIdRef.current = null;
+    localStorage.removeItem(SESSION_KEY);
+    setBotThread([]);
+    void ensureSession();
+  }, [ensureSession]);
+
   const handleEvent = useCallback((e: { event: AgentEvent; sessionId: string | null }) => {
     if (e.sessionId && e.sessionId !== sessionIdRef.current) return;
     const ev = e.event;
@@ -123,5 +134,5 @@ export function usePrivyHermes(cwd: string): {
     }
   }, [push]);
 
-  return { botThread, sendTask, handleEvent };
+  return { botThread, sendTask, newSession, handleEvent };
 }

@@ -26,7 +26,7 @@ export function PrivyCloudTab() {
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
   const privyBase = rootDir ? `${rootDir}/Privy Cloud` : '';
-  const { botThread, sendTask, handleEvent } = usePrivyHermes(privyBase);
+  const { botThread, sendTask, newSession, handleEvent } = usePrivyHermes(privyBase);
 
   const refresh = useCallback(async () => {
     try {
@@ -109,7 +109,7 @@ export function PrivyCloudTab() {
         )}
       </div>
       <div className="panel" style={{ width: '30%', flexShrink: 0, padding: 12 }}>
-        <ChatPanel entries={chat} botThread={botThread} onSendText={sendText} onSendHermes={sendTask}
+        <ChatPanel entries={chat} botThread={botThread} onSendText={sendText} onSendHermes={sendTask} onNewSession={newSession}
           onSendFiles={sendFiles} onSendFolder={sendFolder} onOpenFile={openFile} />
       </div>
       {error && <div className="toast">{error}</div>}

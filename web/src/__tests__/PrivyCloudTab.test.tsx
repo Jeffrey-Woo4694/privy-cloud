@@ -69,6 +69,15 @@ describe('PrivyCloudTab directory browsing', () => {
     expect(calls.some((c) => c[0] === 'prompt.submit' && c[1]?.text === 'list the files')).toBe(true);
   });
 
+  it('starts a new Hermes session from the chat view', async () => {
+    const { api } = await import('../api');
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /Hermes/ })); // open the agent view
+    fireEvent.click(screen.getByRole('button', { name: /New session/ }));
+    const calls = (api.hermesCall as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((c) => c[0] === 'session.create')).toBe(true);
+  });
+
   it('shows the category directories at the root (no nested files)', async () => {
     render(<PrivyCloudTab />);
     expect(await screen.findByTitle('Open Images')).toBeInTheDocument();
