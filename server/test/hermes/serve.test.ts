@@ -21,6 +21,17 @@ describe('serve', () => {
     child.kill('SIGKILL');
   }, 10000);
 
+  it('gives the spawned hermes its own isolated HERMES_HOME', async () => {
+    // The fake hermes only announces a port when HERMES_HOME is set — proving
+    // the child is pointed at the backend's own home, not the shared ~/.hermes.
+    const fake = '#!/bin/sh\n[ -z "$HERMES_HOME" ] && exit 1\nprintf \'HERMES_BACKEND_READY port=48004\\n\'\nwhile :; do :; done\n';
+    const path = join(tmpdir(), `fake-hermes-home-${process.pid}.sh`);
+    writeFileSync(path, fake); chmodSync(path, 0o755);
+    const { info, child } = await spawnServe(path);
+    expect(info.port).toBe(48004);
+    child.kill('SIGKILL');
+  }, 10000);
+
   it('strips ANTHROPIC_* env from the child', async () => {
     process.env.ANTHROPIC_AUTH_TOKEN = 'sk-leak';
     const fake = '#!/bin/sh\n[ -n "$ANTHROPIC_AUTH_TOKEN" ] && exit 1\nprintf \'HERMES_BACKEND_READY port=48003\\n\'\nwhile :; do :; done\n';

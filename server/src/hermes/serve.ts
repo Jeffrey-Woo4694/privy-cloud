@@ -9,9 +9,38 @@ import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { randomBytes } from 'node:crypto';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { mkdirSync, copyFileSync, existsSync } from 'node:fs';
 
 /// How long to wait for `hermes serve` to announce its port before failing.
 const SERVE_READY_TIMEOUT_MS = 30_000;
+
+/// The backend's OWN Hermes home. Two `hermes serve` processes sharing one home
+/// (the same `sessions/sessions.json` + `state.db`) deadlock each other — the
+/// Privy Cloud gateway and the Native-Hermes desktop app each spawn one. Point
+/// this gateway at its own copy so they never touch the same files. Override
+/// via `PRIVY_HERMES_HOME`.
+const HERMES_HOME = process.env.PRIVY_HERMES_HOME ?? join(homedir(), '.privy-cloud', 'hermes-home');
+
+/// Provision the isolated home: create the dir and seed `config.yaml` + `.env`
+/// from the standard `~/.hermes` when the isolated copies don't exist yet, so a
+/// fresh setup has a working model/provider config. Best-effort — a failure
+/// (R3) must never break the backend; hermes simply won't start until it's fixed.
+function ensureHermesHome(): void {
+  try {
+    mkdirSync(HERMES_HOME, { recursive: true });
+    const srcHome = join(homedir(), '.hermes');
+    for (const f of ['config.yaml', '.env']) {
+      const src = join(srcHome, f);
+      const dst = join(HERMES_HOME, f);
+      if (!existsSync(dst) && existsSync(src)) copyFileSync(src, dst);
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[hermes] failed to provision isolated HERMES_HOME:', err instanceof Error ? err.message : String(err));
+  }
+}
 
 // Claude Code (via cc-switch) exports `ANTHROPIC_*` env vars to route its own
 // provider traffic. If they leak into the spawned `hermes serve` — and from
@@ -70,9 +99,11 @@ export function spawnServe(
   const timeoutMs = opts.timeoutMs ?? SERVE_READY_TIMEOUT_MS;
   const token = randomBytes(16).toString('hex');
 
+  ensureHermesHome();
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const name of HERMES_ENV_STRIP) delete env[name];
   env.HERMES_DASHBOARD_SESSION_TOKEN = token;
+  env.HERMES_HOME = HERMES_HOME;
 
   const child = spawn(
     hermesBin,
