@@ -61,7 +61,6 @@ export function ChatPanel(props: {
   const dirRef = useRef<HTMLInputElement>(null);
   const sharingRef = useRef<HTMLDivElement>(null);
   const hermesRef = useRef<HTMLDivElement>(null);
-  const prevBotLen = useRef(props.botThread.length);
 
   // The @-mentionable roles (default agent + installed profiles). Best-effort:
   // on failure the default role keeps working.
@@ -77,11 +76,12 @@ export function ChatPanel(props: {
     if (el) el.scrollTop = el.scrollHeight;
   }, [props.entries, props.botThread, activeTab]);
 
-  // A new agent message while looking at the Sharing tab → unread dot on Hermes.
+  // Any bot-thread activity while looking at the Sharing tab → unread dot on Hermes.
+  // (Streaming deltas rewrite the same message, so track reference changes, not
+  // length — otherwise a reply that streams while you're on Sharing shows no dot.)
   useEffect(() => {
-    if (props.botThread.length > prevBotLen.current && activeTab !== 'hermes') setBotUnread(true);
-    prevBotLen.current = props.botThread.length;
-  }, [props.botThread.length, activeTab]);
+    if (activeTab !== 'hermes') setBotUnread(true);
+  }, [props.botThread]);
 
   // Mention menu: open when the text's last token starts with '@' (no space after yet).
   const mentionMatch = /(^|\s)@([a-z0-9_-]*)$/i.exec(text);

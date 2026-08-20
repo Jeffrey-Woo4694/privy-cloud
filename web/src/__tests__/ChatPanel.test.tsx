@@ -102,6 +102,20 @@ describe('ChatPanel', () => {
     expect(screen.getByText('hello')).not.toBeVisible();
   });
 
+  it('shows an unread dot on Hermes when bot activity happens while on Sharing, and clears on switch', () => {
+    // Streaming deltas rewrite the same bubble, so the dot must track thread
+    // changes, not length — this simulates a turn streaming while on Sharing.
+    const { rerender } = render(<ChatPanel {...props} botThread={[{ id: 'u1', role: 'user', text: '@hermes hi', streaming: false }]} />);
+    rerender(<ChatPanel {...props} botThread={[
+      { id: 'u1', role: 'user', text: '@hermes hi', streaming: false },
+      { id: 'b1', role: 'assistant', text: '', streaming: true },
+    ]} />);
+    expect(screen.getByRole('button', { name: /Hermes ●/ })).toBeInTheDocument();
+    // Switching to the Hermes tab clears it.
+    fireEvent.click(screen.getByRole('button', { name: /Hermes/ }));
+    expect(screen.queryByText('●')).toBeNull();
+  });
+
   it('auto-switches to the Hermes tab when an @hermes message is sent', () => {
     const onSendHermes = vi.fn();
     render(<ChatPanel {...props} onSendHermes={onSendHermes} />);
