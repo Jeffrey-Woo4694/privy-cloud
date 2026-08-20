@@ -78,7 +78,9 @@ export function ChatPanel(props: {
   useEffect(() => { setMentionIndex(0); }, [mentionOpen]);
 
   const selectRole = (role: HermesRole) => {
-    setText(text.replace(/@[a-z0-9_-]*$/i, `@${role.id} `)); // @role + trailing space
+    // Insert the label (what the menu showed), not the id — so "Hermes" stays "Hermes".
+    // Routing matches case-insensitively against the id, so @Hermes routes correctly.
+    setText(text.replace(/@[a-z0-9_-]*$/i, `@${role.label} `)); // @role + trailing space
     setMentionIndex(0);
   };
 

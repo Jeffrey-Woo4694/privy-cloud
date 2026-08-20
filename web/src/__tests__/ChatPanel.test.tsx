@@ -47,12 +47,23 @@ describe('ChatPanel', () => {
     expect(screen.getByText('@hermes')).toBeInTheDocument();
   });
 
-  it('pressing Enter on the mention menu selects it and adds a trailing space', () => {
+  it('pressing Enter on the mention menu selects it (label case) and adds a trailing space', () => {
     render(<ChatPanel {...props} />);
     const input = screen.getByPlaceholderText(/Send message/) as HTMLInputElement;
     fireEvent.change(input, { target: { value: '@' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(input.value).toBe('@hermes ');
+    expect(input.value).toBe('@Hermes ');
+  });
+
+  it('routes a message @-mentioning the selected role to the bot regardless of case', () => {
+    const onSendText = vi.fn();
+    const onSendHermes = vi.fn();
+    render(<ChatPanel {...props} onSendText={onSendText} onSendHermes={onSendHermes} />);
+    const input = screen.getByPlaceholderText(/Send message/);
+    fireEvent.change(input, { target: { value: '@Hermes tidy the files' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSendHermes).toHaveBeenCalledWith('@Hermes tidy the files');
+    expect(onSendText).not.toHaveBeenCalled();
   });
 
   it('routes a message with a selected mention to the bot', () => {
