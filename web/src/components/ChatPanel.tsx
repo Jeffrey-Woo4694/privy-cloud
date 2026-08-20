@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { KINDS, type ChatEntry, type Kind } from '@privy/shared';
 
 const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
@@ -26,6 +26,13 @@ export function ChatPanel(props: { entries: ChatEntry[]; onSendText(t: string): 
   const [text, setText] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Like a chat app: stay pinned to the bottom so the newest message is always in view.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [props.entries]);
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => { props.onSendFiles([...e.target.files!]); e.target.value = ''; };
   const onDir = (e: ChangeEvent<HTMLInputElement>) => { props.onSendFolder([...e.target.files!]); e.target.value = ''; };
@@ -33,7 +40,7 @@ export function ChatPanel(props: { entries: ChatEntry[]; onSendText(t: string): 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="panel-title">Chat</div>
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
         {props.entries.length === 0 && <div className="empty-state">Send a message, file, or folder to get started.</div>}
         {props.entries.map((e) => <Entry key={e.id} entry={e} onOpenFile={props.onOpenFile} />)}
       </div>

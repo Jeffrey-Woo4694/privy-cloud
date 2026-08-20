@@ -8,6 +8,11 @@ import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { directChildren, parentPath } from '../sharingView';
 
+/** The chat API returns newest-first; reverse to chronological so the latest message is at the bottom. */
+function chronological<T>(entries: T[]): T[] {
+  return [...entries].reverse();
+}
+
 export function PrivyCloudTab() {
   const [items, setItems] = useState<FileItem[]>([]);
   const [chat, setChat] = useState<ChatEntry[]>([]);
@@ -19,7 +24,8 @@ export function PrivyCloudTab() {
   const refresh = useCallback(async () => {
     try {
       const [its, entries] = await Promise.all([api.listItems(), api.listChat()]);
-      setItems(its); setChat(entries);
+      setItems(its);
+      setChat(chronological(entries)); // newest at the bottom, like a chat app
     } catch (e) { setError((e as Error).message); }
   }, []);
 
@@ -28,7 +34,7 @@ export function PrivyCloudTab() {
   useEffect(() => {
     const disconnect = connect({
       onItemsChanged: () => { void api.listItems().then(setItems); },
-      onChatNew: (entry) => setChat((c) => [entry, ...c]),
+      onChatNew: (entry) => setChat((c) => [...c, entry]), // append → newest at the bottom
     });
     return disconnect;
   }, []);
@@ -49,7 +55,9 @@ export function PrivyCloudTab() {
     })();
     setSelected(found);
   };
-  const onSaved = async () => { await Promise.all([api.listItems().then(setItems), api.listChat().then(setChat)]); };
+  const onSaved = async () => {
+    await Promise.all([api.listItems().then(setItems), api.listChat().then((e) => setChat(chronological(e)))]);
+  };
 
   // Navigate into/out of a directory. Kind resets to 'all' so the newly shown
   // directory's contents are never hidden by a stale file-type filter.

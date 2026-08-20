@@ -35,6 +35,18 @@ function kindChip(label: string): HTMLElement {
 describe('PrivyCloudTab directory browsing', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('renders chat oldest-first so the newest message is at the bottom', async () => {
+    const { api } = await import('../api');
+    (api.listChat as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { id: '2', ts: '2026-08-20T00:00:00Z', type: 'text', kind: 'text', name: 'b.md', text: 'newer msg', path: 'Markdown/b.md', sender: 'owner' },
+      { id: '1', ts: '2026-08-19T00:00:00Z', type: 'text', kind: 'text', name: 'a.md', text: 'older msg', path: 'Markdown/a.md', sender: 'owner' },
+    ]);
+    render(<PrivyCloudTab />);
+    await screen.findByText('newer msg');
+    const order = screen.getAllByText(/older msg|newer msg/).map((el) => el.textContent);
+    expect(order).toEqual(['older msg', 'newer msg']);
+  });
+
   it('shows the category directories at the root (no nested files)', async () => {
     render(<PrivyCloudTab />);
     expect(await screen.findByTitle('Open Images')).toBeInTheDocument();
