@@ -43,7 +43,7 @@ describe('ChatPanel', () => {
   it('shows the mention menu when typing @', () => {
     render(<ChatPanel {...props} />);
     fireEvent.change(screen.getByPlaceholderText(/Send message/), { target: { value: '@' } });
-    expect(screen.getByText('Hermes')).toBeInTheDocument();
+    // "@hermes" is the menu row's hint text (the tab button says "Hermes").
     expect(screen.getByText('@hermes')).toBeInTheDocument();
   });
 
@@ -83,9 +83,34 @@ describe('ChatPanel', () => {
       { id: 'u1', role: 'user', text: '@hermes hi', streaming: false },
       { id: 'b1', role: 'assistant', text: 'hel', streaming: true },
     ]} />);
-    expect(screen.getByText('Hermes')).toBeInTheDocument();
-    expect(screen.getByText('hel')).toBeInTheDocument();
-    expect(screen.getByText('thinking…')).toBeInTheDocument();
+    // The bot conversation lives on the Hermes tab — switch to it, then the content is visible.
+    fireEvent.click(screen.getByRole('button', { name: /Hermes/ }));
+    expect(screen.getByText('hel')).toBeVisible();
+    expect(screen.getByText('thinking…')).toBeVisible();
+  });
+
+  it('separates file messages (Sharing tab) from the bot thread (Hermes tab)', () => {
+    render(<ChatPanel {...props} entries={[entry]} botThread={[
+      { id: 'b1', role: 'assistant', text: 'hi bot', streaming: false },
+    ]} />);
+    // Sharing tab is active by default → the file entry is visible, the bot is not.
+    expect(screen.getByText('hello')).toBeVisible();
+    expect(screen.getByText('hi bot')).not.toBeVisible();
+    // Switch to Hermes → the bot thread shows, the file entry is hidden.
+    fireEvent.click(screen.getByRole('button', { name: /Hermes/ }));
+    expect(screen.getByText('hi bot')).toBeVisible();
+    expect(screen.getByText('hello')).not.toBeVisible();
+  });
+
+  it('auto-switches to the Hermes tab when an @hermes message is sent', () => {
+    const onSendHermes = vi.fn();
+    render(<ChatPanel {...props} onSendHermes={onSendHermes} />);
+    const input = screen.getByPlaceholderText(/Send message/);
+    fireEvent.change(input, { target: { value: '@hermes hi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSendHermes).toHaveBeenCalledWith('@hermes hi');
+    // The Hermes tab empty state is now visible (we auto-switched to it).
+    expect(screen.getByText(/Type @hermes/)).toBeVisible();
   });
 
   it('opens the stored file when a text entry is clicked', () => {

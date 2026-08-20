@@ -40,6 +40,8 @@ function BotEntry({ m }: { m: PrivyBotMessage }) {
   );
 }
 
+type ChatTab = 'sharing' | 'hermes';
+
 export function ChatPanel(props: {
   entries: ChatEntry[];
   botThread: PrivyBotMessage[];
@@ -52,9 +54,14 @@ export function ChatPanel(props: {
   const [text, setText] = useState('');
   const [roles, setRoles] = useState<HermesRole[]>(DEFAULT_ROLES);
   const [mentionIndex, setMentionIndex] = useState(0);
+  // Two streams, two tabs: file-sharing history vs. the Hermes conversation.
+  const [activeTab, setActiveTab] = useState<ChatTab>('sharing');
+  const [botUnread, setBotUnread] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const sharingRef = useRef<HTMLDivElement>(null);
+  const hermesRef = useRef<HTMLDivElement>(null);
+  const prevBotLen = useRef(props.botThread.length);
 
   // The @-mentionable roles (default agent + installed profiles). Best-effort:
   // on failure the default role keeps working.
@@ -66,9 +73,15 @@ export function ChatPanel(props: {
 
   // Like a chat app: stay pinned to the bottom so the newest message is always in view.
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = activeTab === 'sharing' ? sharingRef.current : hermesRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [props.entries, props.botThread]);
+  }, [props.entries, props.botThread, activeTab]);
+
+  // A new agent message while looking at the Sharing tab → unread dot on Hermes.
+  useEffect(() => {
+    if (props.botThread.length > prevBotLen.current && activeTab !== 'hermes') setBotUnread(true);
+    prevBotLen.current = props.botThread.length;
+  }, [props.botThread.length, activeTab]);
 
   // Mention menu: open when the text's last token starts with '@' (no space after yet).
   const mentionMatch = /(^|\s)@([a-z0-9_-]*)$/i.exec(text);
@@ -97,25 +110,34 @@ export function ChatPanel(props: {
   const onFile = (e: ChangeEvent<HTMLInputElement>) => { props.onSendFiles([...e.target.files!]); e.target.value = ''; };
   const onDir = (e: ChangeEvent<HTMLInputElement>) => { props.onSendFolder([...e.target.files!]); e.target.value = ''; };
 
+  const switchTab = (t: ChatTab) => { setActiveTab(t); if (t === 'hermes') setBotUnread(false); };
+
   const submit = (raw: string) => {
     const trimmed = raw.trim();
     if (!trimmed) return;
     setText('');
-    // "@<role> <task>" talks to the agent; anything else is stored as a file.
+    // "@<role> <task>" talks to the agent (show it on the Hermes tab); anything
+    // else is stored as a file (show it on the Sharing tab).
     const mention = /^@([a-z0-9_-]+)/i.exec(trimmed);
     const isRole = !!mention && roles.some((r) => r.id.toLowerCase() === mention[1].toLowerCase());
-    if (isRole) props.onSendHermes(trimmed);
-    else props.onSendText(trimmed);
+    if (isRole) { switchTab('hermes'); props.onSendHermes(trimmed); }
+    else { switchTab('sharing'); props.onSendText(trimmed); }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div className="panel-title">Chat</div>
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
-        {props.entries.length === 0 && props.botThread.length === 0 && (
-          <div className="empty-state">Send a message, file, folder, or @hermes to get started.</div>
-        )}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+        <button className={`chat-tab${activeTab === 'sharing' ? ' active' : ''}`} onClick={() => switchTab('sharing')}>Sharing</button>
+        <button className={`chat-tab${activeTab === 'hermes' ? ' active' : ''}`} onClick={() => switchTab('hermes')}>
+          Hermes{botUnread ? ' ●' : ''}
+        </button>
+      </div>
+      <div ref={sharingRef} style={{ flex: 1, overflowY: 'auto', display: activeTab === 'sharing' ? 'block' : 'none' }}>
+        {props.entries.length === 0 && <div className="empty-state">Send a message, file, or folder to get started.</div>}
         {props.entries.map((e) => <Entry key={e.id} entry={e} onOpenFile={props.onOpenFile} />)}
+      </div>
+      <div ref={hermesRef} style={{ flex: 1, overflowY: 'auto', display: activeTab === 'hermes' ? 'block' : 'none' }}>
+        {props.botThread.length === 0 && <div className="empty-state">Type @hermes to delegate a task to the agent.</div>}
         {props.botThread.map((m) => <BotEntry key={m.id} m={m} />)}
       </div>
       <div style={{ position: 'relative' }}>
