@@ -7,6 +7,7 @@ import { SharingGrid } from '../components/SharingGrid';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { directChildren, parentPath } from '../sharingView';
+import { usePrivyHermes } from '../hermes/usePrivyHermes';
 
 /** The chat API returns newest-first; reverse to chronological so the latest message is at the bottom. */
 function chronological<T>(entries: T[]): T[] {
@@ -20,6 +21,12 @@ export function PrivyCloudTab() {
   const [currentPath, setCurrentPath] = useState(''); // '' = root of Privy Cloud/
   const [selected, setSelected] = useState<FileItem | null>(null);
   const [error, setError] = useState('');
+  const [rootDir, setRootDir] = useState('');
+
+  // The @hermes bot works in the Privy Cloud base so it can read/write the files.
+  useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
+  const privyBase = rootDir ? `${rootDir}/Privy Cloud` : '';
+  const { botThread, sendTask, handleEvent } = usePrivyHermes(privyBase);
 
   const refresh = useCallback(async () => {
     try {
@@ -35,9 +42,10 @@ export function PrivyCloudTab() {
     const disconnect = connect({
       onItemsChanged: () => { void api.listItems().then(setItems); },
       onChatNew: (entry) => setChat((c) => [...c, entry]), // append → newest at the bottom
+      onHermesEvent: handleEvent,
     });
     return disconnect;
-  }, []);
+  }, [handleEvent]);
 
   const viewItems = useMemo(() => directChildren(items, currentPath, kind), [items, currentPath, kind]);
 
@@ -96,7 +104,8 @@ export function PrivyCloudTab() {
         )}
       </div>
       <div className="panel" style={{ width: '30%', flexShrink: 0, padding: 12 }}>
-        <ChatPanel entries={chat} onSendText={sendText} onSendFiles={sendFiles} onSendFolder={sendFolder} onOpenFile={openFile} />
+        <ChatPanel entries={chat} botThread={botThread} onSendText={sendText} onSendHermes={sendTask}
+          onSendFiles={sendFiles} onSendFolder={sendFolder} onOpenFile={openFile} />
       </div>
       {error && <div className="toast">{error}</div>}
     </div>

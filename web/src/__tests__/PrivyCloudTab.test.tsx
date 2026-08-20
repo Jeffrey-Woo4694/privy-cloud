@@ -25,6 +25,11 @@ vi.mock('../api', () => ({
     getFileText: vi.fn(() => Promise.resolve('')),
     saveFileText: vi.fn(() => Promise.resolve({ ok: true })),
     proxyUrl: (p: string) => p,
+    getMeta: vi.fn(() => Promise.resolve({ root: '/tmp/x', owner: 'owner' })),
+    hermesCall: vi.fn((method: string) =>
+      method === 'session.create'
+        ? Promise.resolve({ session_id: 's1', stored_session_id: 'k1' })
+        : Promise.resolve({})),
   },
 }));
 
@@ -45,6 +50,22 @@ describe('PrivyCloudTab directory browsing', () => {
     await screen.findByText('newer msg');
     const order = screen.getAllByText(/older msg|newer msg/).map((el) => el.textContent);
     expect(order).toEqual(['older msg', 'newer msg']);
+  });
+
+  it('routes an @hermes message to the Hermes session via the relay', async () => {
+    const { api } = await import('../api');
+    render(<PrivyCloudTab />);
+    const input = await screen.findByPlaceholderText(/Send message/);
+    fireEvent.change(input, { target: { value: '@hermes list the files' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    // The user's @hermes command renders as a chat bubble.
+    expect(await screen.findByText('@hermes list the files')).toBeInTheDocument();
+    // A dedicated session is created (with the Privy Cloud base as cwd), then the task is submitted.
+    const calls = (api.hermesCall as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.some((c) => c[0] === 'session.create')).toBe(true);
+    const create = calls.find((c) => c[0] === 'session.create');
+    expect(create?.[1]).toEqual({ cwd: '/tmp/x/Privy Cloud' });
+    expect(calls.some((c) => c[0] === 'prompt.submit' && c[1]?.text === 'list the files')).toBe(true);
   });
 
   it('shows the category directories at the root (no nested files)', async () => {
