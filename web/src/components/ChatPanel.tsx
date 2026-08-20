@@ -83,9 +83,10 @@ export function ChatPanel(props: {
     if (activeTab !== 'hermes') setBotUnread(true);
   }, [props.botThread]);
 
-  // Mention menu: open when the text's last token starts with '@' (no space after yet).
+  // Mention menu: only relevant on the Sharing tab — inside the Hermes view every
+  // message goes to the agent, so '@' needs no menu there.
   const mentionMatch = /(^|\s)@([a-z0-9_-]*)$/i.exec(text);
-  const mentionOpen = !!mentionMatch;
+  const mentionOpen = activeTab === 'sharing' && !!mentionMatch;
   const mentionPartial = mentionMatch ? mentionMatch[2] : '';
   const filteredRoles = roles.filter((r) => r.id.toLowerCase().startsWith(mentionPartial.toLowerCase()));
   useEffect(() => { setMentionIndex(0); }, [mentionOpen]);
@@ -116,12 +117,16 @@ export function ChatPanel(props: {
     const trimmed = raw.trim();
     if (!trimmed) return;
     setText('');
-    // "@<role> <task>" talks to the agent (show it on the Hermes tab); anything
-    // else is stored as a file (show it on the Sharing tab).
+    // Inside the Hermes view, every message is for the agent (no @ needed).
+    // From the Sharing view, "@<role>" delegates and anything else is a file.
+    if (activeTab === 'hermes') {
+      props.onSendHermes(trimmed);
+      return;
+    }
     const mention = /^@([a-z0-9_-]+)/i.exec(trimmed);
     const isRole = !!mention && roles.some((r) => r.id.toLowerCase() === mention[1].toLowerCase());
     if (isRole) { switchTab('hermes'); props.onSendHermes(trimmed); }
-    else { switchTab('sharing'); props.onSendText(trimmed); }
+    else props.onSendText(trimmed);
   };
 
   return (
@@ -137,7 +142,7 @@ export function ChatPanel(props: {
         {props.entries.map((e) => <Entry key={e.id} entry={e} onOpenFile={props.onOpenFile} />)}
       </div>
       <div ref={hermesRef} style={{ flex: 1, overflowY: 'auto', display: activeTab === 'hermes' ? 'block' : 'none' }}>
-        {props.botThread.length === 0 && <div className="empty-state">Type @hermes to delegate a task to the agent.</div>}
+        {props.botThread.length === 0 && <div className="empty-state">Message the agent below — no @ needed here.</div>}
         {props.botThread.map((m) => <BotEntry key={m.id} m={m} />)}
       </div>
       <div style={{ position: 'relative' }}>
@@ -156,8 +161,8 @@ export function ChatPanel(props: {
           </div>
         )}
         <div className="send-input">
-          <input value={text} placeholder="Send message, file, folder, or @hermes…" onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKeyDown} />
+          <input value={text} placeholder={activeTab === 'sharing' ? 'Send message, file, folder, or @hermes…' : 'Message Hermes…'}
+            onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} />
           <button className="btn" aria-label="attach file" onClick={() => fileRef.current?.click()}>📎</button>
           <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()}>📁</button>
           <button className="btn primary" disabled={!text.trim()} onClick={() => submit(text)}>Send</button>

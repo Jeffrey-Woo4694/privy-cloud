@@ -124,7 +124,27 @@ describe('ChatPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(onSendHermes).toHaveBeenCalledWith('@hermes hi');
     // The Hermes tab empty state is now visible (we auto-switched to it).
-    expect(screen.getByText(/Type @hermes/)).toBeVisible();
+    expect(screen.getByText(/Message the agent below/)).toBeVisible();
+  });
+
+  it('on the Hermes tab, a plain message goes to the agent without @', () => {
+    const onSendText = vi.fn();
+    const onSendHermes = vi.fn();
+    render(<ChatPanel {...props} onSendText={onSendText} onSendHermes={onSendHermes} />);
+    fireEvent.click(screen.getByRole('button', { name: /Hermes/ })); // open the agent view
+    const input = screen.getByPlaceholderText(/Message Hermes/);
+    fireEvent.change(input, { target: { value: 'list the files' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSendHermes).toHaveBeenCalledWith('list the files');
+    expect(onSendText).not.toHaveBeenCalled();
+  });
+
+  it('does not show the @ mention menu on the Hermes tab', () => {
+    render(<ChatPanel {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: /Hermes/ }));
+    const input = screen.getByPlaceholderText(/Message Hermes/);
+    fireEvent.change(input, { target: { value: '@' } });
+    expect(screen.queryByText('@hermes')).toBeNull(); // no mention menu in the agent view
   });
 
   it('opens the stored file when a text entry is clicked', () => {
