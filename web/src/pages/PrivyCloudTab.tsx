@@ -108,7 +108,7 @@ export function PrivyCloudTab() {
           </>
         )}
       </div>
-      <div className="panel" style={{ width: '30%', flexShrink: 0, padding: 12 }}>
+      <div className="panel" style={{ width: '30%', flexShrink: 0, minWidth: 0, padding: 12 }}>
         <ChatPanel entries={chat} botThread={botThread} onSendText={sendText} onSendHermes={sendTask} onNewSession={newSession}
           onSendFiles={sendFiles} onSendFolder={sendFolder} onOpenFile={openFile} />
       </div>
