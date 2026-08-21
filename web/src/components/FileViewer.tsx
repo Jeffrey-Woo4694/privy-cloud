@@ -4,7 +4,7 @@ import { api, API_BASE } from '../api';
 import { getToken } from '../auth';
 import { MarkdownEditor } from './MarkdownEditor';
 
-export function FileViewer({ item, onBack, onSaved }: { item: FileItem; onBack(): void; onSaved(): void }) {
+export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem; onBack(): void; onSaved(): void; onTrash?: (path: string) => void }) {
   const url = `${API_BASE}/api/file?path=${encodeURIComponent(item.path)}&token=${encodeURIComponent(getToken() ?? '')}`;
   const [text, setText] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
@@ -23,6 +23,7 @@ export function FileViewer({ item, onBack, onSaved }: { item: FileItem; onBack()
         <span style={{ fontWeight: 600 }}>{item.name}</span>
         <span style={{ flex: 1 }} />
         {(item.kind === 'video' || item.kind === 'image') && <a className="btn" href={url} download={item.name}>Download original</a>}
+        {onTrash && <button className="btn" onClick={() => onTrash(item.path)} title="Move to trash">🗑️ Trash</button>}
       </div>
       {item.kind === 'markdown' && (
         <MarkdownEditor path={item.path} initialText={text}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PrivyCloudTab } from '../pages/PrivyCloudTab';
+import { api } from '../api';
 
 vi.mock('../ws', () => ({ connect: vi.fn(() => () => {}) }));
 
@@ -12,8 +13,6 @@ const FIXTURE = [
   { name: 'deep.txt', path: 'Images/sub/deep.txt', kind: 'document', size: 1, isDir: false, modifiedAt: '' },
 ];
 
-// The factory references FIXTURE lazily (at call time, after module init), so the
-// closure-over-const pattern is safe under vi.mock hoisting.
 vi.mock('../api', () => ({
   API_BASE: '',
   api: {
@@ -25,21 +24,91 @@ vi.mock('../api', () => ({
     getFileText: vi.fn(() => Promise.resolve('')),
     saveFileText: vi.fn(() => Promise.resolve({ ok: true })),
     proxyUrl: (p: string) => p,
+    fileUrl: (p: string) => p,
     getMeta: vi.fn(() => Promise.resolve({ root: '/tmp/x', owner: 'owner' })),
     listHermesRoles: vi.fn(() => Promise.resolve({ roles: [{ id: 'hermes', label: 'Hermes' }] })),
     hermesCall: vi.fn((method: string) =>
       method === 'session.create'
         ? Promise.resolve({ session_id: 's1', stored_session_id: 'k1' })
         : Promise.resolve({})),
+    listTrash: vi.fn(() => Promise.resolve({ items: [] })),
+    trashPath: vi.fn(() => Promise.resolve({ ok: true })),
+    restoreFromTrash: vi.fn(() => Promise.resolve({ ok: true })),
+    deleteFromTrash: vi.fn(() => Promise.resolve({ ok: true })),
   },
 }));
 
-function kindChip(label: string): HTMLElement {
-  return screen.getAllByRole('button', { name: label }).find((b) => b.className.includes('kind-chip'))!;
-}
+describe('PrivyCloudTab file-system sharing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Restore default implementations after any test overrode them.
+    (api.listItems as ReturnType<typeof vi.fn>).mockResolvedValue(FIXTURE);
+    (api.listTrash as ReturnType<typeof vi.fn>).mockResolvedValue({ items: [] });
+  });
 
-describe('PrivyCloudTab directory browsing', () => {
-  beforeEach(() => vi.clearAllMocks());
+  it('shows the sidebar places: Home, Recent, Trash and the category folders', async () => {
+    render(<PrivyCloudTab />);
+    await screen.findByTitle('Open Images'); // loaded
+    for (const label of ['Home', 'Recent', 'Trash', 'Documents', 'Pictures', 'Videos', 'Slides', 'Markdown', 'Folders', 'Other']) {
+      expect(screen.getAllByRole('button', { name: new RegExp(label) }).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('shows the category directories at the root (no nested files)', async () => {
+    render(<PrivyCloudTab />);
+    expect(await screen.findByTitle('Open Images')).toBeInTheDocument();
+    expect(screen.getByTitle('Open Folders')).toBeInTheDocument();
+    expect(screen.queryByText('a.png')).toBeNull();
+    expect(screen.getByText('2 items')).toBeInTheDocument();
+  });
+
+  it('navigates into a folder when its tile is clicked', async () => {
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByTitle('Open Images'));
+    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
+    expect(screen.getByTitle('Open sub')).toBeInTheDocument();
+    expect(screen.queryByText('deep.txt')).toBeNull();
+    expect(screen.getByText('2 items')).toBeInTheDocument();
+  });
+
+  it('navigates back to the root via the back button', async () => {
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByTitle('Open Images'));
+    fireEvent.click(screen.getByLabelText('back'));
+    expect(screen.getByTitle('Open Images')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
+  });
+
+  it('a sidebar category (Pictures) jumps into that folder', async () => {
+    render(<PrivyCloudTab />);
+    await screen.findByTitle('Open Images');
+    fireEvent.click(screen.getAllByRole('button', { name: /Pictures/ })[0]); // sidebar item
+    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
+  });
+
+  it('Recent shows only files, newest-modified first', async () => {
+    (api.listItems as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: 'old.txt', path: 'Documents/old.txt', kind: 'document', size: 1, isDir: false, modifiedAt: '2026-08-18' },
+      { name: 'new.png', path: 'Images/new.png', kind: 'image', size: 1, isDir: false, modifiedAt: '2026-08-20' },
+      { name: 'x', path: 'Folders/x', kind: 'folder', size: 0, isDir: true, modifiedAt: '2026-08-20' },
+    ]);
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /Recent/ }));
+    const titles = screen.getAllByTitle(/\.(txt|png)$/).map((el) => el.getAttribute('title'));
+    expect(titles).toEqual(['new.png', 'old.txt']);
+    expect(screen.queryByTitle(/^Open /)).toBeNull(); // no folder tiles in Recent
+  });
+
+  it('Trash lists trashed items with Restore and Delete-forever', async () => {
+    (api.listTrash as ReturnType<typeof vi.fn>).mockResolvedValue({
+      items: [{ path: 'Images/gone.jpg', name: 'gone.jpg', isDir: false, size: 1, modifiedAt: '' }],
+    });
+    render(<PrivyCloudTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /Trash/ }));
+    expect(await screen.findByText(/Images\/gone\.jpg/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(api.restoreFromTrash).toHaveBeenCalledWith('Images/gone.jpg');
+  });
 
   it('renders chat oldest-first so the newest message is at the bottom', async () => {
     const { api } = await import('../api');
@@ -59,9 +128,7 @@ describe('PrivyCloudTab directory browsing', () => {
     const input = await screen.findByPlaceholderText(/Send message/);
     fireEvent.change(input, { target: { value: '@hermes list the files' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    // The user's @hermes command renders as a chat bubble.
     expect(await screen.findByText('@hermes list the files')).toBeInTheDocument();
-    // A dedicated session is created (with the Privy Cloud base as cwd), then the task is submitted.
     const calls = (api.hermesCall as ReturnType<typeof vi.fn>).mock.calls;
     expect(calls.some((c) => c[0] === 'session.create')).toBe(true);
     const create = calls.find((c) => c[0] === 'session.create');
@@ -69,66 +136,10 @@ describe('PrivyCloudTab directory browsing', () => {
     expect(calls.some((c) => c[0] === 'prompt.submit' && c[1]?.text === 'list the files')).toBe(true);
   });
 
-  it('starts a new Hermes session from the chat view', async () => {
-    const { api } = await import('../api');
-    render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByRole('button', { name: /Hermes/ })); // open the agent view
-    fireEvent.click(screen.getByRole('button', { name: /New session/ }));
-    const calls = (api.hermesCall as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls.some((c) => c[0] === 'session.create')).toBe(true);
-  });
-
-  it('shows the category directories at the root (no nested files)', async () => {
-    render(<PrivyCloudTab />);
-    expect(await screen.findByTitle('Open Images')).toBeInTheDocument();
-    expect(screen.getByTitle('Open Folders')).toBeInTheDocument();
-    // Nested items are not shown at the root.
-    expect(screen.queryByText('a.png')).toBeNull();
-    expect(screen.queryByTitle('Open Images/a.png')).toBeNull();
-  });
-
-  it('navigates into a folder when its tile is clicked', async () => {
-    render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
-    // Direct children are visible; deeper-nested ones are not.
-    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
-    expect(screen.getByTitle('Open sub')).toBeInTheDocument();
-    expect(screen.queryByText('deep.txt')).toBeNull();
-    // Breadcrumb shows the current directory.
-    expect(screen.getByLabelText('current directory')).toHaveTextContent('Images');
-    expect(screen.getByText('← Back')).toBeInTheDocument();
-  });
-
-  it('navigates back to the root via Back', async () => {
-    render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
-    fireEvent.click(screen.getByText('← Back'));
-    expect(screen.getByTitle('Open Images')).toBeInTheDocument();
-    expect(screen.queryByText('← Back')).toBeNull();
-    expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
-  });
-
-  it('a kind chip at the root jumps into that category directory', async () => {
-    render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images')); // wait for load
-    fireEvent.click(screen.getByText('← Back')); // back to root
-    fireEvent.click(kindChip('Images'));
-    expect(screen.getByText('← Back')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
-  });
-
-  it('opens a file in the viewer', async () => {
+  it('opens a file in the viewer and keeps the chat visible', async () => {
     render(<PrivyCloudTab />);
     fireEvent.click(await screen.findByTitle('Open Images'));
     fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
-    expect(screen.getByText('← Back to sharing')).toBeInTheDocument();
-  });
-
-  it('keeps the chat panel visible while a file is open', async () => {
-    render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
-    fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
-    // The viewer is shown inside the sharing panel, but the right chat stays put.
     expect(screen.getByText('← Back to sharing')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
   });
@@ -138,7 +149,6 @@ describe('PrivyCloudTab directory browsing', () => {
     fireEvent.click(await screen.findByTitle('Open Images'));
     fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
     fireEvent.click(screen.getByText('← Back to sharing'));
-    // Back on the grid in the current directory (Images), with the chat intact.
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
   });

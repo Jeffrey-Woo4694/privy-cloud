@@ -50,7 +50,12 @@ export const api = {
   setRoot: async (path: string): Promise<string> =>
     (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
   proxyUrl: (path: string): string => `${API_BASE}/api/proxy?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
+  fileUrl: (path: string): string => `${API_BASE}/api/file?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
   hermesCall: async (method: string, params?: unknown): Promise<unknown> =>
     (await req<{ result: unknown }>('/api/hermes/call', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params }) })).result,
   listHermesRoles: (): Promise<{ roles: { id: string; label: string }[] }> => req('/api/hermes/roles'),
+  listTrash: (): Promise<{ items: { path: string; name: string; isDir: boolean; size: number; modifiedAt: string }[] }> => req('/api/trash'),
+  trashPath: (path: string) => req('/api/trash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
+  restoreFromTrash: (path: string) => req('/api/trash/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
+  deleteFromTrash: (path: string) => req('/api/trash', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
 };
