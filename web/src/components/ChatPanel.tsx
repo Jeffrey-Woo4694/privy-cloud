@@ -79,9 +79,10 @@ export function ChatPanel(props: {
 
   // Any bot-thread activity while looking at the Sharing tab → unread dot on Hermes.
   // (Streaming deltas rewrite the same message, so track reference changes, not
-  // length — otherwise a reply that streams while you're on Sharing shows no dot.)
+  // length — otherwise a reply that streams while you're on Sharing shows no dot.
+  // Require a non-empty thread so an empty fresh mount doesn't show a dot.)
   useEffect(() => {
-    if (activeTab !== 'hermes') setBotUnread(true);
+    if (props.botThread.length > 0 && activeTab !== 'hermes') setBotUnread(true);
   }, [props.botThread]);
 
   // Mention menu: only relevant on the Sharing tab — inside the Hermes view every
@@ -138,9 +139,10 @@ export function ChatPanel(props: {
           Hermes{botUnread ? ' ●' : ''}
         </button>
         <span style={{ flex: 1 }} />
-        {activeTab === 'hermes' && (
-          <button className="btn" title="Start a new Hermes session" onClick={props.onNewSession}>＋ New session</button>
-        )}
+        {/* Always rendered (hidden on Sharing) so the header row keeps a constant
+            height and the Sharing/Hermes tabs don't shift when the button appears. */}
+        <button className="btn" title="Start a new Hermes session" onClick={props.onNewSession}
+          style={activeTab === 'sharing' ? { visibility: 'hidden' } : undefined}>＋ New session</button>
       </div>
       <div ref={sharingRef} style={{ flex: 1, overflowY: 'auto', display: activeTab === 'sharing' ? 'block' : 'none' }}>
         {props.entries.length === 0 && <div className="empty-state">Send a message, file, or folder to get started.</div>}

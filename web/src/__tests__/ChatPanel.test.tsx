@@ -127,12 +127,14 @@ describe('ChatPanel', () => {
     expect(screen.getByText(/Message the agent below/)).toBeVisible();
   });
 
-  it('offers a New session button only on the Hermes tab, which calls onNewSession', () => {
+  it('shows the New session button on the Hermes tab (hidden on Sharing to keep the tabs stable)', () => {
     const onNewSession = vi.fn();
     render(<ChatPanel {...props} onNewSession={onNewSession} />);
-    expect(screen.queryByRole('button', { name: /New session/ })).toBeNull();
+    const btn = screen.getByText('＋ New session');
+    expect(btn).not.toBeVisible(); // rendered but hidden on Sharing
     fireEvent.click(screen.getByRole('button', { name: /Hermes/ }));
-    fireEvent.click(screen.getByRole('button', { name: /New session/ }));
+    expect(btn).toBeVisible();
+    fireEvent.click(btn);
     expect(onNewSession).toHaveBeenCalled();
   });
 
