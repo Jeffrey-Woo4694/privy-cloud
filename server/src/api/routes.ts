@@ -15,6 +15,7 @@ import { ensureProxy } from '../transcode.js';
 import type { AgentEvent } from '../hermes/events.js';
 import type { HermesManager, HermesStatus } from '../hermes/manager.js';
 import { getHermesHome } from '../hermes/serve.js';
+import { listTrash, trashPath, restoreTrashPath, deleteTrashPath } from '../trash.js';
 
 export type ServerEvent =
   | { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' }
@@ -183,6 +184,45 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
       const abs = resolveSafe(base, e.path);
       return !!abs && existsSync(abs);
     });
+  });
+
+  // Recycle bin. `path` is a relative path under `Privy Cloud/` — both for
+  // trashing an existing item and for operating on a mirrored path in the trash.
+  app.get('/api/trash', async () => ({ items: await listTrash(ctx.getRoot()) }));
+
+  app.post('/api/trash', async (req, reply) => {
+    const { path } = (req.body ?? {}) as { path?: string };
+    if (!path) return reply.code(400).send({ error: 'path is required' });
+    try {
+      await trashPath(ctx.getRoot(), path);
+      ctx.emit({ type: 'items:changed', path, change: 'deleted' });
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.post('/api/trash/restore', async (req, reply) => {
+    const { path } = (req.body ?? {}) as { path?: string };
+    if (!path) return reply.code(400).send({ error: 'path is required' });
+    try {
+      await restoreTrashPath(ctx.getRoot(), path);
+      ctx.emit({ type: 'items:changed', path, change: 'created' });
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  app.delete('/api/trash', async (req, reply) => {
+    const { path } = (req.body ?? {}) as { path?: string };
+    if (!path) return reply.code(400).send({ error: 'path is required' });
+    try {
+      await deleteTrashPath(ctx.getRoot(), path);
+      return { ok: true };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   // The Hermes roles available to @-mention in the chat: the default agent

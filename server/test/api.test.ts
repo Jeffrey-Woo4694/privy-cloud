@@ -242,6 +242,31 @@ describe('api', () => {
     await app.close();
   });
 
+  it('trash, list, restore, and delete-forever round-trip via the API', async () => {
+    const app = await boot();
+    mkdirSync(join(root, 'Privy Cloud', 'Images'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Images', 'a.jpg'), 'pic');
+
+    const trash = await app.inject({ method: 'POST', url: '/api/trash', payload: { path: 'Images/a.jpg' }, headers: AUTH });
+    expect(trash.statusCode).toBe(200);
+    expect(existsSync(join(root, 'Privy Cloud', 'Images', 'a.jpg'))).toBe(false);
+
+    const list1 = await app.inject({ method: 'GET', url: '/api/trash', headers: AUTH });
+    expect(list1.json().items.some((i: { path: string }) => i.path === 'Images/a.jpg')).toBe(true);
+
+    const restore = await app.inject({ method: 'POST', url: '/api/trash/restore', payload: { path: 'Images/a.jpg' }, headers: AUTH });
+    expect(restore.statusCode).toBe(200);
+    expect(existsSync(join(root, 'Privy Cloud', 'Images', 'a.jpg'))).toBe(true);
+
+    const trash2 = await app.inject({ method: 'POST', url: '/api/trash', payload: { path: 'Images/a.jpg' }, headers: AUTH });
+    expect(trash2.statusCode).toBe(200);
+    const del = await app.inject({ method: 'DELETE', url: '/api/trash', payload: { path: 'Images/a.jpg' }, headers: AUTH });
+    expect(del.statusCode).toBe(200);
+    const list2 = await app.inject({ method: 'GET', url: '/api/trash', headers: AUTH });
+    expect(list2.json().items.length).toBe(0);
+    await app.close();
+  });
+
   it('GET /api/hermes/roles lists the @-mentionable roles (default hermes)', async () => {
     const app = await boot();
     const res = await app.inject({ method: 'GET', url: '/api/hermes/roles', headers: AUTH });
