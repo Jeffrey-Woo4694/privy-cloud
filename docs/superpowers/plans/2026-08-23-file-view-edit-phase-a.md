@@ -84,17 +84,21 @@ Append after the `document` entry (before `markdown`), using the existing shape:
 
 In `server/test/storage.test.ts` (or a new `server/test/kinds.test.ts`), add:
 
+Create `server/test/kinds.test.ts` with a top-level import (no top-level `await`):
+
 ```ts
-it('detectKind maps audio and archive extensions', () => {
-  const { detectKind } = await import('../src/kinds.js');
-  expect(detectKind('song.mp3', false)).toBe('audio');
-  expect(detectKind('archive.zip', false)).toBe('archive');
-  expect(detectKind('tape.tar', false)).toBe('archive');
-  expect(detectKind('backup.tgz', false)).toBe('archive');
+import { describe, expect, it } from 'vitest';
+import { detectKind } from '../src/kinds.js';
+
+describe('kinds', () => {
+  it('detectKind maps audio and archive extensions', () => {
+    expect(detectKind('song.mp3', false)).toBe('audio');
+    expect(detectKind('archive.zip', false)).toBe('archive');
+    expect(detectKind('tape.tar', false)).toBe('archive');
+    expect(detectKind('backup.tgz', false)).toBe('archive');
+  });
 });
 ```
-
-> If you add a new file instead, import `detectKind` from `../src/kinds.js` (ESM). The assertion above uses a top-level `await` — use `import { detectKind } from '../src/kinds.js';` at the top instead so it is synchronous.
 
 - [ ] **Step 4: Run it to verify it fails (old KINDS lack these)**
 
@@ -277,7 +281,7 @@ git commit -m "feat(privy): office/text file-mode gate on the server; widen text
 - [ ] **Step 1: Create `server/src/backups.ts`**
 
 ```ts
-import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, statSync, existsSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { privyBase } from './directory.js';
@@ -307,7 +311,7 @@ export async function writeBackup(root: string, rel: string, data: Buffer): Prom
 
 export async function pruneBackups(root: string, rel: string): Promise<void> {
   const dir = backupDir(root, rel);
-  if (!existsSync(dir)) return; // prune only when a dir exists — see note below
+  if (!existsSync(dir)) return;
   const now = Date.now();
   const files = readdirSync(dir)
     .map((f) => ({ f, stat: statSync(join(dir, f)) }))
@@ -316,8 +320,6 @@ export async function pruneBackups(root: string, rel: string): Promise<void> {
   files.slice(MAX_PER_REL).forEach((x) => rmSync(join(dir, x.f), { force: true }));
 }
 ```
-
-> Add `existsSync` to the `node:fs` import at the top (currently it imports `mkdirSync, readdirSync, rmSync, statSync`).
 
 - [ ] **Step 2: Write `backups.test.ts`**
 
@@ -381,11 +383,10 @@ git commit -m "feat(privy): per-save pruned backups under .privy/backups"
 
 ```ts
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { readFileSync, existsSync, renameSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, renameSync, mkdirSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { join, dirname, basename } from 'node:path';
 import { privyBase, resolveSafe } from './directory.js';
-import { detectKind } from './kinds.js';
 import { isOfficeEditable, officeFileType } from './fileModes.js';
 import { writeBackup } from './backups.js';
 import type { ServerEvent } from './api/routes.js';
@@ -549,19 +550,25 @@ export class OfficeProvider {
     const status = Number(body?.status ?? 0);
     // Only status 2 (content saved) and 6 (force save) carry a downloadable url.
     if ((status === 2 || status === 6) && typeof body?.url === 'string' && body.url) {
-      const data = await this.fetchSave(body.url as string);
-      const abs = resolveSafe(privyBase(this.getRoot()), s.rel);
-      if (!abs) return { error: 1 };
-      // Backup the pre-overwrite bytes, then atomic-replace (temp + rename).
-      if (existsSync(abs)) await writeBackup(this.getRoot(), s.rel, readFileSync(abs));
-      mkdirSync(dirname(abs), { recursive: true });
-      const tmp = join(dirname(abs), `.tmp-${randomBytes(6).toString('hex')}-${basename(s.rel)}`);
-      await writeFile(tmp, data);
-      renameSync(tmp, abs);
-      const record = this.sessions.get(token);
-      if (record) record.saved = true;
-      this.locked.delete(s.rel);
-      this.emit({ type: 'items:changed', path: s.rel, change: 'modified' });
+      try {
+        const data = await this.fetchSave(body.url as string);
+        const abs = resolveSafe(privyBase(this.getRoot()), s.rel);
+        if (!abs) return { error: 1 };
+        // Backup the pre-overwrite bytes, then atomic-replace (temp + rename).
+        if (existsSync(abs)) await writeBackup(this.getRoot(), s.rel, readFileSync(abs));
+        mkdirSync(dirname(abs), { recursive: true });
+        const tmp = join(dirname(abs), `.tmp-${randomBytes(6).toString('hex')}-${basename(s.rel)}`);
+        await writeFile(tmp, data);
+        renameSync(tmp, abs);
+        const record = this.sessions.get(token);
+        if (record) record.saved = true;
+        this.locked.delete(s.rel);
+        this.emit({ type: 'items:changed', path: s.rel, change: 'modified' });
+      } catch {
+        // A disallowed save origin or a fetch failure is a recoverable reject,
+        // never a crash: report error 1 so the engine shows "Save failed".
+        return { error: 1 };
+      }
     }
     return { error: 0 };
   }
@@ -572,13 +579,11 @@ function httpError(code: string, message: string): Error & { code: string } {
 }
 ```
 
-> Add `statSync` to the `node:fs` import at the top (currently imports `readFileSync, existsSync, renameSync, writeFileSync, mkdirSync`).
-
 - [ ] **Step 2: Write `office.test.ts`**
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRootStructure } from '../src/directory.js';
@@ -588,20 +593,20 @@ let root: string;
 const noop = () => {};
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function makeProvider(engineUrl = 'http://docs.example') {
+async function makeProvider(engineUrl = 'http://docs.example') {
   root = mkdtempSync(join(tmpdir(), 'privy-off-'));
   await initRootStructure(root);
   return new OfficeProvider({ secret: 's', engineUrl, getRoot: () => root, emit: noop as never });
 }
 
 describe('office provider', () => {
-  it('isConfigured reflects the engine url', () => {
-    expect(makeProvider('').isConfigured()).toBe(false);
-    expect(makeProvider('http://docs.example').isConfigured()).toBe(true);
+  it('isConfigured reflects the engine url', async () => {
+    expect((await makeProvider('')).isConfigured()).toBe(false);
+    expect((await makeProvider('http://docs.example')).isConfigured()).toBe(true);
   });
 
-  it('createSession mints a one-use token and locks the file', () => {
-    const p = makeProvider();
+  it('createSession mints a one-use token and locks the file', async () => {
+    const p = await makeProvider();
     mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
     writeFileSync(join(root, 'Privy Cloud', 'Documents', 'a.docx'), 'x');
     const info = p.createSession('Documents/a.docx');
@@ -612,33 +617,31 @@ describe('office provider', () => {
     expect(p.validateToken(info.token!)).toBeTruthy();
   });
 
-  it('rejects non-office and unknown paths', () => {
-    const p = makeProvider();
+  it('rejects non-office and unknown paths', async () => {
+    const p = await makeProvider();
     mkdirSync(join(root, 'Privy Cloud', 'Other'), { recursive: true });
     writeFileSync(join(root, 'Privy Cloud', 'Other', 'b.key'), 'x');
     expect(() => p.createSession('Other/b.key')).toThrow(); // Keynote not openable
     expect(() => p.createSession('missing.docx')).toThrow();
   });
 
-  it('callback save writes bytes, backs up, emits once, and rejects a second save', async () => {
-    const p = makeProvider();
+  it('callback rejects a save from a disallowed origin (SSRF guard)', async () => {
+    const p = await makeProvider();
     mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
     writeFileSync(join(root, 'Privy Cloud', 'Documents', 'c.docx'), 'ORIGINAL');
     const info = p.createSession('Documents/c.docx');
+    // A data: URL has no hostname → the guard rejects it; handleCallback returns
+    // error 1 rather than throwing. The happy path (loopback fetch + write-back)
+    // is proven end-to-end in the Task 5 integration test, not here.
     const result = await p.handleCallback(info.token!, { status: 2, url: 'data:text/plain,EDITED' });
-    // fetchSave uses global fetch; a data: URL's hostname is empty → not allowed. This
-    // test asserts the SSRF guard rejects an obviously-bad origin.
-    expect((result as { error: number }).error).toBe(1);
-    // Correct path: point the save at a loopback URL the provider is allowed to fetch.
+    expect(result.error).toBe(1);
   });
 });
 ```
 
-> The last test is intentionally partial: it proves bad-origin saves are rejected. The full save-back proof lives in the integration test (Task 5), which uses a real loopback HTTP server. Simplify this test to assert the reject path for now, and cover the happy path in Task 5. The happy path (loopback fetch) is exercised there.
-
 - [ ] **Step 3: Run it**
 
-Run: `npx vitest run test/office.test.ts` from `server/`. Expected: PASS (the last test just asserts the reject returns error 1; ensure `httpError` is thrown and `handleCallback` awaits it — note `handleCallback` does not throw, it returns `{error:1}` on validation failure, but `fetchSave` throws for a bad origin. Since the test awaits `handleCallback`, a thrown `BAD_ORIGIN` would reject the promise. To keep the test passing, make the save-origin call happen inside a try in `handleCallback`, or assert the promise rejects. Cleanest: in the test, wrap in `await expect(...).rejects` OR make `handleCallback` never throw and return `{error:1}`. Choose: the test asserts `rejects`. Adjust Step 2's last expectation accordingly in practice.)
+Run: `npx vitest run test/office.test.ts` from `server/`. Expected: PASS. The last test relies on `handleCallback` never throwing: a disallowed save origin (here a `data:` URL, whose hostname is empty) makes `fetchSave` throw `BAD_ORIGIN`, which is caught by the try/catch inside `handleCallback` and returned as `{ error: 1 }`. If you change `handleCallback` to let `fetchSave` propagate, the test would need `await expect(...).rejects` instead — keep it returning `{ error: 1 }`.
 
 - [ ] **Step 4: Commit**
 
@@ -675,21 +678,30 @@ export function getOfficeSecret(): string {
 
 - [ ] **Step 2: Wire the provider + exemption in `index.ts`**
 
-Import `OfficeProvider` and `getOfficeSecret`:
+Add to the imports (near line 14):
 
 ```ts
+import { randomBytes } from 'node:crypto';
 import { OfficeProvider } from './office.js';
 import { getOfficeSecret } from './config.js';
 ```
 
-Before `const hermes = ...`, compute the provider config:
+Add `officeSecret?` and `officeEngineUrl?` to the `buildApp` opts type (line 16).
+
+Compute the engine config **after** the block that declares `const listeners = []` (line 76) — the provider's `emit` closure needs `listeners` in scope — and **before** the `const ctx: ApiContext = { ... }` literal (line 77). For an ephemeral test root (`opts.root` is set) fall back to a **random** secret so the real `~/.privy-cloud/config.json` is never read or written:
 
 ```ts
-  const officeSecret = opts?.officeSecret ?? getOfficeSecret();
+  const officeSecret = opts?.officeSecret ?? (ephemeral ? randomBytes(32).toString('hex') : getOfficeSecret());
   const officeEngineUrl = opts?.officeEngineUrl ?? process.env.OFFICE_ENGINE_URL ?? '';
+  const office = new OfficeProvider({
+    secret: officeSecret,
+    engineUrl: officeEngineUrl,
+    getRoot: () => cfg.root,
+    emit: (e) => { for (const l of listeners) l(e); },
+  });
 ```
 
-Add `office` to the `ctx` object (it already has `hermes`):
+Then attach it to the context by adding `office,` to the `ctx` literal (line 77-82):
 
 ```ts
   const ctx: ApiContext = {
@@ -697,11 +709,11 @@ Add `office` to the `ctx` object (it already has `hermes`):
     setRootPath: async (p) => { const r = ephemeral ? resolve(p) : await setRoot(p); cfg.root = r; return r; },
     emit: (e) => { for (const l of listeners) l(e); },
     hermes,
-    office: new OfficeProvider({ secret: officeSecret, engineUrl: officeEngineUrl, getRoot: () => cfg.root, emit: (e) => { for (const l of listeners) l(e); } }),
+    office,
   };
 ```
 
-In the bearer-token `onRequest` hook, add the exemption right after the `/api/health` check:
+In the bearer-token `onRequest` hook, add the exemption right after the `/api/health` check (line 56):
 
 ```ts
     // Engine-facing endpoints authenticate with their one-use HMAC token (the
@@ -713,12 +725,22 @@ In the bearer-token `onRequest` hook, add the exemption right after the `/api/he
 
 - [ ] **Step 3: BuildAppOpts + route additions**
 
-`BuildAppOpts` (check `index.ts` signature) gains `officeSecret?: string; officeEngineUrl?: string;`. `ApiContext` gains `office?: OfficeProvider`.
+`buildApp`'s opts type (line 16 of `index.ts`) gains `officeSecret?: string; officeEngineUrl?: string;`. `ApiContext` (line 26 of `routes.ts`) gains `office?: OfficeProvider`.
 
-In `routes.ts`, import `OFFICE` helpers and `mimeFor`:
+In `routes.ts`, import the provider type and add it to the context interface:
 
 ```ts
-import { isOfficeEditable } from '../fileModes.js';
+import type { OfficeProvider } from '../office.js';
+```
+
+```ts
+export interface ApiContext {
+  getRoot(): string;
+  setRootPath(p: string): Promise<string>;
+  emit(e: ServerEvent): void;
+  hermes?: HermesManager;
+  office?: OfficeProvider;
+}
 ```
 
 Add routes inside `registerRoutes` (e.g. after `/api/rename`):
@@ -790,7 +812,7 @@ Create `server/test/office-integration.test.ts`:
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
@@ -800,10 +822,6 @@ import { initRootStructure } from '../src/directory.js';
 let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-function listen(server: ReturnType<typeof createServer>): Promise<number> {
-  return new Promise((res) => server.listen(0, '127.0.0.1', () => res((server.address() as { port: number }).port)));
-}
-
 describe('office integration (stub engine)', () => {
   it('fetches the file via the session and writes a save back through the callback', async () => {
     process.env.HERMES_ENABLED = '0';
@@ -812,8 +830,9 @@ describe('office integration (stub engine)', () => {
     mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
     writeFileSync(join(root, 'Privy Cloud', 'Documents', 'r.docx'), 'ORIGINAL_BYTES');
 
-    // Stub "engine": serves the edited bytes on GET /save and is allowed as the
-    // save origin (loopback). The provider's fetchSave guard allows loopback.
+    // Stub "engine": serves the edited bytes on any GET. It is allowed as the
+    // save origin because it is loopback (127.0.0.1) — the provider's fetchSave
+    // guard permits loopback/private hosts.
     const engineUrl = await new Promise<string>((res) => {
       const server = createServer((_req, res2) => {
         res2.setHeader('content-type', 'application/octet-stream');
@@ -833,12 +852,14 @@ describe('office integration (stub engine)', () => {
     expect(sess.json().enabled).toBe(true);
     const { token, fileUrl, callbackUrl } = sess.json();
 
-    // Engine fetches the ORIGINAL bytes via the session token (loopback-allowed).
-    const fetched = await app.inject({ method: 'GET', url: fileUrl.replace('host.containers.internal:5178', `127.0.0.1:${String(app.server.address().port)}`) });
+    // Engine fetches the ORIGINAL bytes via the session token. Inject the full
+    // `fileUrl` directly: Fastify routes by pathname + query and ignores the
+    // host:port, so production's host.containers.internal:5178 needs no rewrite.
+    const fetched = await app.inject({ method: 'GET', url: fileUrl });
     expect(fetched.body).toBe('ORIGINAL_BYTES');
 
     // Engine saves edited content through the callback (stub engine's loopback).
-    const cb = await app.inject({ method: 'POST', url: callbackUrl.replace('host.containers.internal:5178', `127.0.0.1:${String(app.server.address().port)}`), payload: { status: 2, url: `${engineUrl}/save` } });
+    const cb = await app.inject({ method: 'POST', url: callbackUrl, payload: { status: 2, url: `${engineUrl}/save` } });
     expect(cb.json()).toEqual({ error: 0 });
 
     // The vault file is updated and a backup exists.
@@ -850,7 +871,7 @@ describe('office integration (stub engine)', () => {
 });
 ```
 
-> Two implementation choices this test depends on: (1) `fileUrl`/`callbackUrl` use `host.containers.internal:<PRIVY_PORT>`; in tests the app binds an ephemeral port, so the test rewrites the host:port to `127.0.0.1:<ephemeral>`. To keep this simple, make the provider build the URLs from a configurable origin instead: add `cfg.officeOrigin` and use it when present, defaulting to `http://host.containers.internal:<PRIVY_PORT>`. Then the test passes `officeOrigin: 'http://127.0.0.1:<port>'` and skips the string rewrite. **Adjust the provider's `createSession` to accept `origin` from `OfficeConfig`** and add `officeOrigin` to `buildApp` opts + `OfficeProvider` constructor. This is the cleaner, reliable design — incorporate it now rather than relying on a brittle string replace.
+> **Reliability note:** `fileUrl`/`callbackUrl` are built by the provider against `host.containers.internal:<PRIVY_PORT>` — the production host-local bridge. The test injects those full URLs directly: Fastify's `inject` parses the pathname and query and routes on them, ignoring the host and port, so no host/port rewriting is needed and no `officeOrigin` config option is required. The provider keeps its PRIVY_PORT-based origin unchanged.
 
 - [ ] **Step 6: Run the suite**
 
@@ -939,11 +960,18 @@ describe('editorFor', () => {
 ```tsx
 import { useEffect, useRef, useState } from 'react';
 
-export function TextFileEditor({ path, onSave }: { path: string; onSave: (c: string) => Promise<void> }) {
-  const [content, setContent] = useState('');
+export function TextFileEditor({ path, initialText, onSave }: { path: string; initialText: string; onSave: (c: string) => Promise<void> }) {
+  const [content, setContent] = useState(initialText);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+
+  // Re-sync when async-loaded text arrives: the parent fetches text on mount, so
+  // initialText is '' on the first render, then fills in — the editor must pick it
+  // up. A dependency on `initialText` only refires when the value actually changes
+  // (the parent's `text` state is set once, not on every keystroke), so this never
+  // clobbers in-progress typing.
+  useEffect(() => { setContent(initialText); }, [initialText]);
 
   const save = async () => {
     if (saving) return;
@@ -1108,8 +1136,9 @@ export function DocEditor({ path, name, onSaved, onTrash }: { path: string; name
     const script = document.createElement('script');
     script.src = `${session.engineUrl}/web-apps/apps/api/documents/api.js`;
     script.onload = () => {
-      const docType = (document.documentElement.getAttribute('data-office-type') as 'word' | 'cell' | 'slide' | null) ?? 'word';
-      const fileType = (session.fileType as 'word' | 'cell' | 'slide') ?? docType;
+      // fileType comes straight from the session (the backend's officeFileType),
+      // not a DOM attribute. OnlyOffice needs to know word/cell/slide upfront.
+      const fileType = (session.fileType as 'word' | 'cell' | 'slide' | undefined) ?? 'word';
       if (!window.DocsAPI) { setError('Editor failed to load'); return; }
       new window.DocsAPI.DocEditor('placeholder', {
         document: { fileType, key: session.key, title: name, url: session.fileUrl },
@@ -1142,7 +1171,7 @@ export function DocEditor({ path, name, onSaved, onTrash }: { path: string; name
 
 - [ ] **Step 3: Refactor `FileViewer.tsx` to dispatch**
 
-Import `editorFor` and the new components, then replace the content section. Keep the header, download/trash bar, and the existing image/video proxy branches. Replace the final two blocks (pdf/document-other/slide/other/folder) with a single dispatch:
+Import `editorFor` and the new components, then replace the content section. Keep the header, download/trash bar, and the existing **image/video proxy branches** (`item.kind === 'image'` / `item.kind === 'video'`) — `editorFor` returns `'none'` for members of those kinds, so they must stay as kind branches and the 'none' dispatch must skip them. **Remove** the existing `item.kind === 'markdown'` branch (lines ~28-31) — the new dispatch covers markdown via `mode === 'markdown'`. Replace the pdf/document-other/slide/other/folder blocks with a single dispatch:
 
 ```tsx
 import { editorFor } from '../fileEditor';
@@ -1153,9 +1182,10 @@ import { AudioPlayer } from './AudioPlayer';
 import { ArchiveInfo } from './ArchiveInfo';
 ```
 
-Add text loading for text/structured (like markdown already does). Extend the `useEffect` that loads text:
+Add a `useState` for the structured→text toggle and text loading (FileViewer already imports `useState`/`useEffect` for markdown):
 
 ```tsx
+  const [editingText, setEditingText] = useState(false);
   const mode = editorFor(item.name);
   useEffect(() => {
     if (mode === 'text' || mode === 'structured' || mode === 'markdown') api.getFileText(item.path).then(setText);
@@ -1166,13 +1196,15 @@ Replace the content JSX (the `item.kind === 'markdown'`, the `pdf` block, and th
 
 ```tsx
       {mode === 'markdown' && <MarkdownEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
-      {mode === 'text' && <TextFileEditor path={item.path} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
-      {mode === 'structured' && <StructuredViewer name={item.name} text={text} onEdit={() => {/* toggle handled by a local state to switch to TextFileEditor */}} />}
+      {mode === 'text' && <TextFileEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
+      {mode === 'structured' && (editingText
+        ? <TextFileEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); setEditingText(false); }} />
+        : <StructuredViewer name={item.name} text={text} onEdit={() => setEditingText(true)} />)}
       {mode === 'audio' && <AudioPlayer path={item.path} name={item.name} />}
       {mode === 'archive' && <ArchiveInfo item={item} />}
       {mode === 'pdf' && <div className="viewer-body"><iframe src={url} title={item.name} style={{ width: '100%', height: '100%', border: 'none' }} /></div>}
       {mode === 'office' && <DocEditor path={item.path} name={item.name} onSaved={onSaved} onTrash={onTrash} />}
-      {mode === 'none' && (
+      {mode === 'none' && item.kind !== 'image' && item.kind !== 'video' && item.kind !== 'folder' && (
         <div className="viewer-body">
           <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
             <div style={{ fontSize: 40 }}>📄</div>
@@ -1184,7 +1216,7 @@ Replace the content JSX (the `item.kind === 'markdown'`, the `pdf` block, and th
       {item.kind === 'folder' && <div className="viewer-body"><div style={{ color: 'var(--muted)' }}>Folders are shown in the sharing grid — browse them by opening files.</div></div>}
 ```
 
-> The structured "toggle to text editor" is a small local state (`editingText`). Implement it: when `onEdit` fires, flip to a `TextFileEditor` for the same path. Keep it minimal and tested in `FileViewer.test.tsx`.
+> `editorFor` returns `'none'` for image/video/folder names, so the 'none' branch is gated on `item.kind` to avoid double-rendering beside the retained image/video proxy branches and the folder message. Add one `FileViewer.test.tsx` case: a `.docx` shows `DocEditor` (or its fallback), a `.csv` shows `StructuredViewer`, an `mp3` shows `AudioPlayer`.
 
 - [ ] **Step 4: Tests**
 
