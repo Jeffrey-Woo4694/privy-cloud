@@ -17,6 +17,7 @@ import type { AgentEvent } from '../hermes/events.js';
 import type { HermesManager, HermesStatus } from '../hermes/manager.js';
 import { getHermesHome } from '../hermes/serve.js';
 import { listTrash, trashPath, restoreTrashPath, deleteTrashPath } from '../trash.js';
+import type { OfficeProvider } from '../office.js';
 
 export type ServerEvent =
   | { type: 'items:changed'; path: string; change: 'created' | 'modified' | 'deleted' | 'renamed' }
@@ -29,6 +30,7 @@ export interface ApiContext {
   setRootPath(p: string): Promise<string>;
   emit(e: ServerEvent): void;
   hermes?: HermesManager;
+  office?: OfficeProvider;
 }
 
 const MIME: Record<string, string> = {
@@ -138,6 +140,50 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
       // eslint-disable-next-line no-console
       console.error('failed to rename item:', err);
       return reply.code(500).send({ error: 'operation failed' });
+    }
+  });
+
+  app.get('/api/office/session', async (req, reply) => {
+    const office = ctx.office;
+    if (!office || !office.isConfigured()) return { enabled: false };
+    const rel = (req.query as { path?: string }).path ?? '';
+    if (!privyResolve(ctx, rel)) return reply.code(400).send({ error: 'unsafe path' });
+    try {
+      const info = office.createSession(rel);
+      if ('enabled' in info && !info.enabled) return { enabled: false };
+      return info;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'NOT_OFFICE') return reply.code(400).send({ error: 'not an office document' });
+      if (code === 'LOCKED') return reply.code(409).send({ error: 'already being edited' });
+      if (code === 'NOT_FOUND') return reply.code(404).send({ error: 'not found' });
+      // eslint-disable-next-line no-console
+      console.error('office session failed:', err);
+      return reply.code(500).send({ error: 'operation failed' });
+    }
+  });
+
+  app.get('/api/office/file', async (req, reply) => {
+    const office = ctx.office;
+    const token = (req.query as { token?: string }).token ?? '';
+    const s = office?.streamFile(token);
+    if (!s) return reply.code(401).send({ error: 'unauthorized' });
+    const abs = privyResolve(ctx, s.rel);
+    if (!abs) return reply.code(400).send({ error: 'unsafe path' });
+    return reply.type(s.mime).send(createReadStream(abs));
+  });
+
+  app.post('/api/office/callback', async (req, reply) => {
+    const office = ctx.office;
+    const token = (req.query as { token?: string }).token ?? '';
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    try {
+      const result = await office?.handleCallback(token, body) ?? { error: 1 };
+      return result;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('office callback failed:', err);
+      return { error: 1 };
     }
   });
 

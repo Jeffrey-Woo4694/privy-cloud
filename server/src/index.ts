@@ -12,8 +12,11 @@ import { attachSocket } from './api/socket.js';
 import { createWatcher } from './watcher.js';
 import { backfillProxies, cleanupOrphanedProxies } from './transcode.js';
 import { createHermesManager, type HermesManager } from './hermes/manager.js';
+import { randomBytes } from 'node:crypto';
+import { OfficeProvider } from './office.js';
+import { getOfficeSecret } from './config.js';
 
-export async function buildApp(opts?: { root?: string; token?: string; hermes?: HermesManager }): Promise<FastifyInstance> {
+export async function buildApp(opts?: { root?: string; token?: string; hermes?: HermesManager; officeSecret?: string; officeEngineUrl?: string }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
 
   // CORS allowlist so BOTH documented launch paths work cross-origin:
@@ -54,6 +57,9 @@ export async function buildApp(opts?: { root?: string; token?: string; hermes?: 
     const path = req.url.split('?')[0];
     if (!path.startsWith('/api') && !path.startsWith('/ws')) return;
     if (path === '/api/health') return;
+    // Engine-facing endpoints authenticate with their one-use HMAC token (the
+    // engine has no user bearer), so exempt them from the bearer check.
+    if (path === '/api/office/file' || path === '/api/office/callback') return;
     const got = req.headers.authorization?.replace(/^Bearer\s+/i, '')
       ?? (req.query as Record<string, string | undefined>).token;
     if (got !== authToken) return reply.code(401).send({ error: 'unauthorized' });
@@ -74,11 +80,20 @@ export async function buildApp(opts?: { root?: string; token?: string; hermes?: 
   const hermes = opts?.hermes ?? createHermesManager(process.env.HERMES_BIN ?? 'hermes');
 
   const listeners: Array<(e: ServerEvent) => void> = [];
+  const officeSecret = opts?.officeSecret ?? (ephemeral ? randomBytes(32).toString('hex') : getOfficeSecret());
+  const officeEngineUrl = opts?.officeEngineUrl ?? process.env.OFFICE_ENGINE_URL ?? '';
+  const office = new OfficeProvider({
+    secret: officeSecret,
+    engineUrl: officeEngineUrl,
+    getRoot: () => cfg.root,
+    emit: (e) => { for (const l of listeners) l(e); },
+  });
   const ctx: ApiContext = {
     getRoot: () => cfg.root,
     setRootPath: async (p) => { const r = ephemeral ? resolve(p) : await setRoot(p); cfg.root = r; return r; },
     emit: (e) => { for (const l of listeners) l(e); },
     hermes,
+    office,
   };
 
   // Serve the built web frontend (web/dist) when present, so one URL exposes UI + API.

@@ -403,4 +403,11 @@ describe('api', () => {
 
     await app.close();
   });
+
+  it('office session reports disabled when no engine is configured', async () => {
+    const app = await boot();
+    const sess = await app.inject({ method: 'GET', url: '/api/office/session?path=' + encodeURIComponent('Documents/a.docx'), headers: AUTH });
+    expect(sess.json()).toEqual({ enabled: false });
+    await app.close();
+  });
 });

@@ -51,6 +51,14 @@ export async function loadConfig(): Promise<AppConfig> {
   return { root: resolve(typeof rootVal === 'string' ? rootVal : DEFAULT_ROOT()), owner: OWNER, token };
 }
 
+export function getOfficeSecret(): string {
+  const raw = readConfig();
+  if (typeof raw.officeSecret === 'string' && raw.officeSecret.length > 0) return raw.officeSecret;
+  const s = randomBytes(32).toString('hex');
+  writeFileSync(CONFIG_FILE(), JSON.stringify({ ...raw, officeSecret: s }, null, 2));
+  return s;
+}
+
 export async function setRoot(path: string): Promise<string> {
   ensureHomeConfig();
   const abs = resolve(path);
