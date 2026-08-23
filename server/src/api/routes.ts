@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
 import { listItems, resolveSafe, initRootStructure, privyBase, proxyPathFor } from '../directory.js';
-import { storeText, storeFile, stageFolderUpload, createDirectory, createFile } from '../storage.js';
+import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, renameItem } from '../storage.js';
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
@@ -114,6 +114,26 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
       // Unknown fs errors (EACCES, EIO, …) also carry absolute paths; log them server-side and stay generic.
       // eslint-disable-next-line no-console
       console.error('failed to create item:', err);
+      return reply.code(500).send({ error: 'operation failed' });
+    }
+  });
+
+  app.post('/api/rename', async (req, reply) => {
+    const { path, newName } = (req.body ?? {}) as { path?: string; newName?: string };
+    if (!path || !newName) return reply.code(400).send({ error: 'path and newName are required' });
+    try {
+      const rel = await renameItem(ctx.getRoot(), path.trim(), newName.trim());
+      ctx.emit({ type: 'items:changed', path: rel, change: 'renamed' });
+      return { path: rel };
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'INVALID_NAME') return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      if (code === 'UNSAFE') return reply.code(400).send({ error: 'unsafe path' });
+      if (code === 'NOT_FOUND') return reply.code(404).send({ error: 'not found' });
+      if (code === 'EXISTS') return reply.code(409).send({ error: 'already exists' });
+      // Unknown fs errors may carry absolute paths — log server-side, stay generic.
+      // eslint-disable-next-line no-console
+      console.error('failed to rename item:', err);
       return reply.code(500).send({ error: 'operation failed' });
     }
   });

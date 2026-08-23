@@ -343,4 +343,34 @@ describe('api', () => {
     expect(missingParent.statusCode).toBe(404);
     await app.close();
   });
+
+  it('POST /api/rename renames an item and emits items:changed', async () => {
+    const app = await boot();
+    await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'a.txt', kind: 'file' }, headers: AUTH });
+    const res = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: 'a.txt', newName: 'b.txt' }, headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ path: 'b.txt' });
+    expect(existsSync(join(root, 'Privy Cloud', 'b.txt'))).toBe(true);
+    expect(existsSync(join(root, 'Privy Cloud', 'a.txt'))).toBe(false);
+    await app.close();
+  });
+
+  it('POST /api/rename rejects conflicts, bad names, and missing items', async () => {
+    const app = await boot();
+    await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'a.txt', kind: 'file' }, headers: AUTH });
+    await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'b.txt', kind: 'file' }, headers: AUTH });
+
+    const conflict = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: 'a.txt', newName: 'b.txt' }, headers: AUTH });
+    expect(conflict.statusCode).toBe(409);
+
+    const bad = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: 'a.txt', newName: '../x' }, headers: AUTH });
+    expect(bad.statusCode).toBe(400);
+
+    const missing = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: 'zz.txt', newName: 'x.txt' }, headers: AUTH });
+    expect(missing.statusCode).toBe(404);
+
+    const noBody = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: 'a.txt' }, headers: AUTH });
+    expect(noBody.statusCode).toBe(400);
+    await app.close();
+  });
 });
