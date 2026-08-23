@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, API_BASE } from '../api';
 import { getToken } from '../auth';
 
-interface Session { enabled: boolean; token?: string; key?: string; fileUrl?: string; callbackUrl?: string; engineUrl?: string; fileType?: string; title?: string }
+interface Session { enabled: boolean; key?: string; fileUrl?: string; callbackUrl?: string; engineUrl?: string; fileType?: string; title?: string }
 
 declare global { interface Window { DocsAPI?: { DocEditor: new (id: string, cfg: unknown) => unknown } } }
 
@@ -32,7 +32,7 @@ export function DocEditor({ path, name, onSaved, onTrash }: { path: string; name
         document: { fileType, key: session.key, title: name, url: session.fileUrl },
         editorConfig: { callbackUrl: session.callbackUrl, lang: 'en', custom: { autosave: true } },
         height: '100%', width: '100%', events: { onSave: () => onSaved() },
-        type: 'desktop', token: session.token,
+        type: 'desktop',
       } as unknown);
     };
     script.onerror = () => setError('Editor unavailable');
