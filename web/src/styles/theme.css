@@ -1,12 +1,12 @@
 :root[data-theme='dark'] {
   --bg: #0c0e12; --panel: #11141a; --panel2: #171b23; --border: #242a36;
   --text: #e8ebf2; --muted: #8b92a6; --accent: #2dd4bf; --accent-ink: #0b0f14;
-  --chipbg: #1b202b; --bubble: #141922; --inputbg: #0f1218; --danger: #f87171;
+  --chipbg: #1b202b; --bubble: #141922; --inputbg: #0f1218; --danger: #f87171; --danger-ink: #0b0f14;
 }
 :root[data-theme='light'] {
   --bg: #f6f7f9; --panel: #ffffff; --panel2: #ffffff; --border: #e3e6ec;
   --text: #1d2433; --muted: #6b7486; --accent: #0d9488; --accent-ink: #ffffff;
-  --chipbg: #eef1f6; --bubble: #f0f3f8; --inputbg: #ffffff; --danger: #dc2626;
+  --chipbg: #eef1f6; --bubble: #f0f3f8; --inputbg: #ffffff; --danger: #dc2626; --danger-ink: #ffffff;
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -86,4 +86,4 @@ button { font: inherit; cursor: pointer; }
 .confirm-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 .confirm-text { font-size: 13px; color: var(--muted); margin-bottom: 16px; word-break: break-all; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn.danger { background: var(--danger); color: #fff; border-color: transparent; font-weight: 600; }
+.btn.danger { background: var(--danger); color: var(--danger-ink); border-color: transparent; font-weight: 600; }
