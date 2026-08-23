@@ -139,6 +139,9 @@ export async function renameItem(root: string, path: string, newName: string): P
   const base = privyBase(root);
   const oldAbs = resolveSafe(base, path);
   if (!oldAbs) throw httpError('UNSAFE', 'unsafe path');
+  // `.privy` is backend-internal (proxies, trash, chat log) — never let a client rename inside it.
+  const internal = join(base, '.privy');
+  if (oldAbs === internal || oldAbs.startsWith(internal + '/')) throw httpError('UNSAFE', 'unsafe path');
   if (!existsSync(oldAbs)) throw httpError('NOT_FOUND', 'not found');
   const isDir = statSync(oldAbs).isDirectory();
   const parent = dirname(path); // '.' when the item sits directly under Privy Cloud/
@@ -148,7 +151,7 @@ export async function renameItem(root: string, path: string, newName: string): P
   if (newRel === path) return path; // same name — no-op (avoids self-conflict)
   if (existsSync(newAbs)) throw httpError('EXISTS', 'already exists');
   await rename(oldAbs, newAbs);
-  const kind = detectKind(clean, isDir);
+  const kind = detectKind(basename(path), isDir); // kind from the OLD name — a rename never changes the media encoding
   if (kind === 'video' || kind === 'image') {
     const oldProxy = proxyPathFor(root, path, kind);
     if (existsSync(oldProxy)) await rename(oldProxy, proxyPathFor(root, newRel, kind));

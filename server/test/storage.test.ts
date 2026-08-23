@@ -191,7 +191,7 @@ it('renameItem moves a media proxy and clears pending', async () => {
   await renameItem(root, 'clip.mov', 'clip2.mov');
   expect(existsSync(proxyPathFor(root, 'clip.mov', 'video'))).toBe(false);
   expect(existsSync(proxyPathFor(root, 'clip2.mov', 'video'))).toBe(true);
-  expect(existsSync(pendingPathFor(root, 'clip2.mov', 'video'))).toBe(false);
+  expect(existsSync(pendingPathFor(root, 'clip.mov', 'video'))).toBe(false);
 });
 
 it('renameItem rewrites matching chat-log paths', async () => {
