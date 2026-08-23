@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initRootStructure } from '../src/directory.js';
-import { storeText, storeFile, storeFolder, uniquePath, createDirectory, createFile, sanitizeSegment } from '../src/storage.js';
-import { readEntries } from '../src/chatLog.js';
+import { initRootStructure, proxyPathFor, pendingPathFor } from '../src/directory.js';
+import { storeText, storeFile, storeFolder, uniquePath, createDirectory, createFile, sanitizeSegment, renameItem } from '../src/storage.js';
+import { readEntries, appendEntry } from '../src/chatLog.js';
 
 let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
@@ -140,4 +140,65 @@ describe('create', () => {
     // 100 emoji = 400 UTF-8 bytes, even though .length is only 100.
     expect(sanitizeSegment('💾'.repeat(100))).toBeNull();
   });
+});
+
+it('renameItem renames a file in place', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  await createFile(root, '', 'old.md', Buffer.from('# hi'));
+  const rel = await renameItem(root, 'old.md', 'new.md');
+  expect(rel).toBe('new.md');
+  expect(existsSync(join(root, 'Privy Cloud', 'old.md'))).toBe(false);
+  expect(readFileSync(join(root, 'Privy Cloud', 'new.md'), 'utf8')).toBe('# hi');
+});
+
+it('renameItem renames a folder and its descendants', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  await createDirectory(root, '', 'docs');
+  await createFile(root, 'docs', 'a.txt', Buffer.from('a'));
+  const rel = await renameItem(root, 'docs', 'guide');
+  expect(rel).toBe('guide');
+  expect(existsSync(join(root, 'Privy Cloud', 'docs'))).toBe(false);
+  expect(readFileSync(join(root, 'Privy Cloud', 'guide', 'a.txt'), 'utf8')).toBe('a');
+});
+
+it('renameItem same name is a no-op', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  await createFile(root, '', 'a.txt', Buffer.from('a'));
+  expect(await renameItem(root, 'a.txt', 'a.txt')).toBe('a.txt');
+});
+
+it('renameItem rejects invalid names, missing items, and conflicts', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  await createFile(root, '', 'a.txt', Buffer.from('a'));
+  await expect(renameItem(root, 'a.txt', '../evil')).rejects.toMatchObject({ code: 'INVALID_NAME' });
+  await expect(renameItem(root, 'a.txt', '.hidden')).rejects.toMatchObject({ code: 'INVALID_NAME' });
+  await expect(renameItem(root, 'missing.txt', 'b.txt')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  await createFile(root, '', 'b.txt', Buffer.from('b'));
+  await expect(renameItem(root, 'a.txt', 'b.txt')).rejects.toMatchObject({ code: 'EXISTS' });
+});
+
+it('renameItem moves a media proxy and clears pending', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  await createFile(root, '', 'clip.mov', Buffer.from('video'));
+  mkdirSync(join(root, 'Privy Cloud', '.privy', 'proxies'), { recursive: true }); // the proxy dir does not exist yet
+  writeFileSync(proxyPathFor(root, 'clip.mov', 'video'), 'PROXY');
+  writeFileSync(pendingPathFor(root, 'clip.mov', 'video'), '');
+  await renameItem(root, 'clip.mov', 'clip2.mov');
+  expect(existsSync(proxyPathFor(root, 'clip.mov', 'video'))).toBe(false);
+  expect(existsSync(proxyPathFor(root, 'clip2.mov', 'video'))).toBe(true);
+  expect(existsSync(pendingPathFor(root, 'clip2.mov', 'video'))).toBe(false);
+});
+
+it('renameItem rewrites matching chat-log paths', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  await createFile(root, '', 'note.md', Buffer.from('# hi'));
+  await appendEntry(root, { type: 'file', kind: 'markdown', name: 'note.md', path: 'note.md', sender: 'owner' });
+  await renameItem(root, 'note.md', 'renamed.md');
+  expect((await readEntries(root))[0].path).toBe('renamed.md');
 });

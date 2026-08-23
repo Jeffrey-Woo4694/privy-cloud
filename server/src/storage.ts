@@ -4,9 +4,9 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { join, dirname, basename, extname } from 'node:path';
 import type { ChatEntry } from '@privy/shared';
-import { resolveSafe, privyBase, folderFor } from './directory.js';
+import { resolveSafe, privyBase, folderFor, proxyPathFor, pendingPathFor } from './directory.js';
 import { detectKind } from './kinds.js';
-import { appendEntry } from './chatLog.js';
+import { appendEntry, renameEntries } from './chatLog.js';
 
 export type UploadData = Buffer | Readable;
 
@@ -124,6 +124,39 @@ export async function createFile(root: string, parentRel: string, fileName: stri
   const { rel } = resolveCreateTarget(root, parentRel, fileName);
   await writeAbs(root, rel, data, true); // exclusive — never silently overwrite
   return rel;
+}
+
+/**
+ * Rename an item in place (same parent directory). Validates the new name,
+ * refuses conflicts, moves any media proxy alongside, clears a stale pending
+ * marker, and rewrites chat-log paths so history stays consistent. Returns the
+ * new relative path. Same-parent rename only, so `rename` is atomic and EXDEV
+ * cannot occur.
+ */
+export async function renameItem(root: string, path: string, newName: string): Promise<string> {
+  const clean = sanitizeSegment(newName);
+  if (!clean) throw httpError('INVALID_NAME', 'invalid name');
+  const base = privyBase(root);
+  const oldAbs = resolveSafe(base, path);
+  if (!oldAbs) throw httpError('UNSAFE', 'unsafe path');
+  if (!existsSync(oldAbs)) throw httpError('NOT_FOUND', 'not found');
+  const isDir = statSync(oldAbs).isDirectory();
+  const parent = dirname(path); // '.' when the item sits directly under Privy Cloud/
+  const newRel = parent === '.' ? clean : join(parent, clean);
+  const newAbs = resolveSafe(base, newRel);
+  if (!newAbs) throw httpError('UNSAFE', 'unsafe path');
+  if (newRel === path) return path; // same name — no-op (avoids self-conflict)
+  if (existsSync(newAbs)) throw httpError('EXISTS', 'already exists');
+  await rename(oldAbs, newAbs);
+  const kind = detectKind(clean, isDir);
+  if (kind === 'video' || kind === 'image') {
+    const oldProxy = proxyPathFor(root, path, kind);
+    if (existsSync(oldProxy)) await rename(oldProxy, proxyPathFor(root, newRel, kind));
+    const pending = pendingPathFor(root, path, kind);
+    if (existsSync(pending)) await rm(pending, { force: true });
+  }
+  await renameEntries(root, path, newRel);
+  return newRel;
 }
 
 /** Cross-device-safe move: rename, falling back to copy+remove when EXDEV. */
