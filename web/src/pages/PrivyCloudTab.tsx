@@ -15,7 +15,7 @@ function chronological<T>(entries: T[]): T[] {
   return [...entries].reverse();
 }
 
-interface TrashItem { path: string; name: string; isDir: boolean; size: number; modifiedAt: string }
+export interface TrashItem { path: string; name: string; isDir: boolean; size: number; modifiedAt: string }
 
 export function PrivyCloudTab() {
   const [items, setItems] = useState<FileItem[]>([]);
