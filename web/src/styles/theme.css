@@ -73,3 +73,9 @@ button { font: inherit; cursor: pointer; }
 .placeholder-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; color: var(--muted); }
 .empty-state { color: var(--muted); font-size: 14px; padding: 30px; text-align: center; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--border); color: var(--text); padding: 10px 16px; border-radius: 8px; z-index: 10; }
+.ctx-menu { min-width: 180px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35); padding: 4px; z-index: 1000; }
+.ctx-menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+.ctx-menu-item:hover:not([aria-disabled='true']) { background: var(--chipbg); }
+.ctx-menu-item[aria-disabled='true'] { color: var(--muted); cursor: default; opacity: .6; }
+.ctx-menu-icon { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
+.ctx-menu-sep { border-top: 1px solid var(--border); margin: 4px 6px; }
