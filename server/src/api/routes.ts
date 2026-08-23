@@ -11,6 +11,7 @@ import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, r
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
+import { isTextEditable } from '../fileModes.js';
 import { ensureProxy } from '../transcode.js';
 import type { AgentEvent } from '../hermes/events.js';
 import type { HermesManager, HermesStatus } from '../hermes/manager.js';
@@ -36,6 +37,8 @@ const MIME: Record<string, string> = {
   mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
   pdf: 'application/pdf', md: 'text/plain; charset=utf-8', markdown: 'text/plain; charset=utf-8', txt: 'text/plain; charset=utf-8',
   csv: 'text/csv', json: 'application/json', xml: 'text/xml',
+  mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', ogg: 'audio/ogg', aac: 'audio/aac', m4a: 'audio/x-m4a',
+  zip: 'application/zip', tar: 'application/x-tar', gz: 'application/gzip', tgz: 'application/gzip',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ppt: 'application/vnd.ms-powerpoint',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -162,8 +165,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const rel = (req.query as { path: string }).path ?? '';
     const abs = privyResolve(ctx, rel);
     if (!abs) return reply.code(400).send({ error: 'unsafe path' });
-    const kind = detectKind(rel.split('/').pop() ?? '', false);
-    if (kind !== 'markdown') return reply.code(400).send({ error: 'only text files are editable' });
+    if (!isTextEditable(rel.split('/').pop() ?? '')) {
+      return reply.code(400).send({ error: 'not an editable text file' });
+    }
     const { content } = (req.body ?? {}) as { content?: string };
     await writeFile(abs, content ?? '', 'utf8');
     ctx.emit({ type: 'items:changed', path: rel, change: 'modified' });

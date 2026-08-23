@@ -70,6 +70,24 @@ describe('api', () => {
     await app.close();
   });
 
+  it('PUT /api/file edits any text extension and rejects binaries', async () => {
+    const app = await boot();
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'data.csv'), 'a,b\n1,2');
+    const csv = await app.inject({ method: 'PUT', url: '/api/file?path=' + encodeURIComponent('Documents/data.csv'), payload: { content: 'x,y' }, headers: AUTH });
+    expect(csv.statusCode).toBe(200);
+    const got = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('Documents/data.csv'), headers: AUTH });
+    expect(got.body).toBe('x,y');
+
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'pic.png'), 'x');
+    const png = await app.inject({ method: 'PUT', url: '/api/file?path=' + encodeURIComponent('Documents/pic.png'), payload: { content: 'boom' }, headers: AUTH });
+    expect(png.statusCode).toBe(400);
+    // the PNG bytes are untouched
+    const img = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('Documents/pic.png'), headers: AUTH });
+    expect(img.body).toBe('x');
+    await app.close();
+  });
+
   it('folder upload streams per-part and survives files beyond the backpressure threshold', async () => {
     const app = await boot();
     const BOUNDARY = '----privy-test';
