@@ -25,6 +25,8 @@ export function PrivyCloudTab() {
   const [selected, setSelected] = useState<FileItem | null>(null);
   const [error, setError] = useState('');
   const [rootDir, setRootDir] = useState('');
+  const [creating, setCreating] = useState<null | 'folder' | 'file'>(null);
+  const [newName, setNewName] = useState('');
 
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
@@ -78,6 +80,7 @@ export function PrivyCloudTab() {
   // Navigate to a location (sidebar, breadcrumb, or folder tile); refresh trash when entering it.
   const navigate = (newLoc: Location) => {
     setLoc(newLoc);
+    setCreating(null); setNewName(''); // never carry an open create dialog into a new location
     if (newLoc.type === 'trash') refreshTrash();
   };
 
@@ -111,6 +114,19 @@ export function PrivyCloudTab() {
     catch (e) { setError((e as Error).message); }
   };
 
+  const canCreate = loc.type === 'home' || loc.type === 'folder';
+  const parentRel = loc.type === 'folder' ? loc.path : '';
+  const confirmCreate = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    try {
+      if (creating === 'folder') await api.createFolder(parentRel, name);
+      else await api.createFile(parentRel, name, '');
+      setCreating(null); setNewName('');
+      void refresh();
+    } catch (e) { setError((e as Error).message); }
+  };
+
   const rightPanel = (
     <div className="panel" style={{ width: '30%', flexShrink: 0, minWidth: 0, padding: 12 }}>
       <ChatPanel entries={chat} botThread={botThread} onSendText={sendText} onSendHermes={sendTask} onNewSession={newSession}
@@ -136,7 +152,25 @@ export function PrivyCloudTab() {
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           <SharingSidebar location={loc} onSelect={navigate} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-            <PathBar location={loc} onNavigate={navigate} onBack={goBack} canGoBack={loc.type === 'folder'} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} canGoBack={loc.type === 'folder'} /></div>
+              {canCreate && creating === null && (
+                <>
+                  <button className="btn" onClick={() => { setCreating('folder'); setNewName(''); }}>+ Folder</button>
+                  <button className="btn" onClick={() => { setCreating('file'); setNewName(''); }}>+ File</button>
+                </>
+              )}
+              {canCreate && creating !== null && (
+                <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void confirmCreate(); if (e.key === 'Escape') { setCreating(null); setNewName(''); } }}
+                    placeholder={creating === 'folder' ? 'Folder name' : 'File name'}
+                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #3a3a3a', background: '#1a1a1a', color: 'inherit', minWidth: 140 }} />
+                  <button className="btn btn-primary" onClick={() => void confirmCreate()}>Create</button>
+                  <button className="btn" onClick={() => { setCreating(null); setNewName(''); }}>Cancel</button>
+                </span>
+              )}
+            </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {loc.type === 'trash' ? (
                 <div className="trash-list">

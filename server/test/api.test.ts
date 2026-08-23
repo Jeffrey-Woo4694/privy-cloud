@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/index.js';
@@ -295,6 +295,52 @@ describe('api', () => {
     });
     expect(res.statusCode).toBe(502);
     expect(res.json()).toEqual({ error: 'boom: model exploded' });
+    await app.close();
+  });
+
+  it('POST /api/items creates folders and files, and rejects conflicts', async () => {
+    const app = await boot();
+
+    const mkdir = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'Projects', kind: 'folder' }, headers: AUTH });
+    expect(mkdir.statusCode).toBe(200);
+    expect((mkdir.json() as { path: string }).path).toBe('Projects');
+    expect(statSync(join(root, 'Privy Cloud', 'Projects')).isDirectory()).toBe(true);
+
+    const mkfile = await app.inject({
+      method: 'POST', url: '/api/items',
+      payload: { name: 'notes.md', kind: 'file', parentPath: 'Projects', content: '# hello' },
+      headers: AUTH,
+    });
+    expect(mkfile.statusCode).toBe(200);
+    expect((mkfile.json() as { path: string }).path).toBe('Projects/notes.md');
+    expect(readFileSync(join(root, 'Privy Cloud', 'Projects', 'notes.md'), 'utf8')).toBe('# hello');
+
+    const dup = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'Projects', kind: 'folder' }, headers: AUTH });
+    expect(dup.statusCode).toBe(409);
+    await app.close();
+  });
+
+  it('POST /api/items rejects unsafe names, invalid kinds, and internal parents', async () => {
+    const app = await boot();
+
+    const traversal = await app.inject({ method: 'POST', url: '/api/items', payload: { name: '../evil', kind: 'folder' }, headers: AUTH });
+    expect(traversal.statusCode).toBe(400);
+
+    const badKind = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'x', kind: 'garbage' }, headers: AUTH });
+    expect(badKind.statusCode).toBe(400);
+
+    const hidden = await app.inject({ method: 'POST', url: '/api/items', payload: { name: '.secret', kind: 'folder' }, headers: AUTH });
+    expect(hidden.statusCode).toBe(400);
+
+    const tooLong = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'x'.repeat(300), kind: 'folder' }, headers: AUTH });
+    expect(tooLong.statusCode).toBe(400);
+
+    // Creating inside the backend-internal .privy dir must be refused.
+    const privy = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'x', kind: 'folder', parentPath: '.privy' }, headers: AUTH });
+    expect(privy.statusCode).toBe(400);
+
+    const missingParent = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'x', kind: 'folder', parentPath: 'NoSuchDir' }, headers: AUTH });
+    expect(missingParent.statusCode).toBe(404);
     await app.close();
   });
 });

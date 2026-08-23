@@ -1,4 +1,4 @@
-import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { rename, copyFile, rm } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -36,12 +36,27 @@ export function uniquePath(root: string, folder: string, name: string): string {
   }
 }
 
-async function writeAbs(root: string, rel: string, data: UploadData): Promise<void> {
+/** Sanitize a single path segment (folder or file name). Returns null when invalid. */
+export function sanitizeSegment(name: string): string | null {
+  const clean = name.trim();
+  if (!clean) return null;
+  if (clean === '.' || clean === '..') return null;
+  if (clean.startsWith('.')) return null; // hidden files are excluded from the view
+  if (clean.includes('/') || clean.includes('\\') || clean.includes('\0')) return null;
+  if (basename(clean) !== clean) return null;
+  if (Buffer.byteLength(clean, 'utf8') > 255) return null; // ext4 caps a name at 255 bytes, not chars
+  return clean;
+}
+
+async function writeAbs(root: string, rel: string, data: UploadData, exclusive = false): Promise<void> {
   const abs = resolveSafe(privyBase(root), rel);
   if (!abs) throw new Error('unsafe path');
   mkdirSync(dirname(abs), { recursive: true });
   if (data instanceof Readable) {
-    await pipeline(data, createWriteStream(abs)); // stream large files, never full-buffer
+    // stream large files, never full-buffer
+    await pipeline(data, createWriteStream(abs, exclusive ? { flags: 'wx' } : undefined));
+  } else if (exclusive) {
+    writeFileSync(abs, data, { flag: 'wx' }); // atomic create — throws EEXIST rather than overwriting
   } else {
     writeFileSync(abs, data);
   }
@@ -71,6 +86,44 @@ export async function storeFolder(root: string, folderName: string, files: Array
     await writeAbs(root, rel, f.data);
   }
   return appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
+}
+
+/** An error carrying a structured code that the API route maps to an HTTP status. */
+function httpError(code: string, message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
+/** Validate a create target — name, parent directory, and free target — returning its rel + abs paths. */
+function resolveCreateTarget(root: string, parentRel: string, name: string): { rel: string; abs: string } {
+  const clean = sanitizeSegment(name);
+  if (!clean) throw httpError('INVALID_NAME', 'invalid name');
+  const base = privyBase(root);
+  const parentAbs = parentRel === '' ? base : resolveSafe(base, parentRel);
+  if (!parentAbs) throw httpError('UNSAFE_PARENT', 'unsafe parent path');
+  // `.privy` is backend-internal (proxies, trash, chat log) — never let a client create inside it.
+  const internal = join(base, '.privy');
+  if (parentAbs === internal || parentAbs.startsWith(internal + '/')) throw httpError('UNSAFE_PARENT', 'unsafe parent path');
+  if (!existsSync(parentAbs)) throw httpError('PARENT_NOT_FOUND', 'parent not found');
+  if (!statSync(parentAbs).isDirectory()) throw httpError('PARENT_NOT_DIR', 'parent is not a directory');
+  const rel = parentRel === '' ? clean : join(parentRel, clean);
+  const abs = resolveSafe(base, rel);
+  if (!abs) throw httpError('UNSAFE', 'unsafe path');
+  if (existsSync(abs)) throw httpError('EXISTS', 'already exists');
+  return { rel, abs };
+}
+
+/** Create an empty directory inside `parentRel` ('' = Privy Cloud root). Returns the new rel path. */
+export async function createDirectory(root: string, parentRel: string, dirName: string): Promise<string> {
+  const { rel, abs } = resolveCreateTarget(root, parentRel, dirName);
+  mkdirSync(abs, { recursive: false }); // throws EEXIST on a race → route maps it to 409
+  return rel;
+}
+
+/** Create a file with `data` inside `parentRel`. Returns the new rel path. */
+export async function createFile(root: string, parentRel: string, fileName: string, data: UploadData): Promise<string> {
+  const { rel } = resolveCreateTarget(root, parentRel, fileName);
+  await writeAbs(root, rel, data, true); // exclusive — never silently overwrite
+  return rel;
 }
 
 /** Cross-device-safe move: rename, falling back to copy+remove when EXDEV. */

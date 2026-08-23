@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
 import { listItems, resolveSafe, initRootStructure, privyBase, proxyPathFor } from '../directory.js';
-import { storeText, storeFile, stageFolderUpload } from '../storage.js';
+import { storeText, storeFile, stageFolderUpload, createDirectory, createFile } from '../storage.js';
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
@@ -83,6 +83,39 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const kind = (req.query as { kind?: string }).kind;
     const all = await listItems(ctx.getRoot());
     return kind ? all.filter((i) => i.kind === kind) : all;
+  });
+
+  app.post('/api/items', async (req, reply) => {
+    const body = (req.body ?? {}) as { parentPath?: string; name?: string; kind?: string; content?: string };
+    const parentRel = (body.parentPath ?? '').trim();
+    const name = (body.name ?? '').trim();
+    const kind = body.kind;
+    if (kind !== 'file' && kind !== 'folder') return reply.code(400).send({ error: 'kind must be "file" or "folder"' });
+    try {
+      const rel = kind === 'folder'
+        ? await createDirectory(ctx.getRoot(), parentRel, name)
+        : await createFile(ctx.getRoot(), parentRel, name, Buffer.from(body.content ?? '', 'utf8'));
+      ctx.emit({ type: 'items:changed', path: rel, change: 'created' });
+      if (kind === 'file') {
+        const k = detectKind(name, false);
+        if (k === 'video' || k === 'image') void ensureProxy(ctx.getRoot(), rel, k, ctx.emit);
+      }
+      return { path: rel };
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'EXISTS' || code === 'EEXIST') return reply.code(409).send({ error: 'already exists' });
+      if (code === 'PARENT_NOT_FOUND' || code === 'ENOENT') return reply.code(404).send({ error: 'parent not found' });
+      if (code === 'INVALID_NAME' || code === 'UNSAFE_PARENT' || code === 'UNSAFE' || code === 'PARENT_NOT_DIR') {
+        // These are hand-written, path-free messages from storage.ts.
+        return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+      // ENAMETOOLONG's message embeds the full server path — don't echo it.
+      if (code === 'ENAMETOOLONG') return reply.code(400).send({ error: 'name is too long' });
+      // Unknown fs errors (EACCES, EIO, …) also carry absolute paths; log them server-side and stay generic.
+      // eslint-disable-next-line no-console
+      console.error('failed to create item:', err);
+      return reply.code(500).send({ error: 'operation failed' });
+    }
   });
 
   app.get('/api/file', async (req, reply) => {

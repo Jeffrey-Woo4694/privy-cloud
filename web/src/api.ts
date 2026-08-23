@@ -58,4 +58,8 @@ export const api = {
   trashPath: (path: string) => req('/api/trash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
   restoreFromTrash: (path: string) => req('/api/trash/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
   deleteFromTrash: (path: string) => req('/api/trash', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),
+  createFolder: (parentPath: string, name: string): Promise<{ path: string }> =>
+    req('/api/items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentPath, name, kind: 'folder' }) }),
+  createFile: (parentPath: string, name: string, content = ''): Promise<{ path: string }> =>
+    req('/api/items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentPath, name, kind: 'file', content }) }),
 };

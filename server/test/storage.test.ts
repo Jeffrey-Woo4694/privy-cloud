@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRootStructure } from '../src/directory.js';
-import { storeText, storeFile, storeFolder, uniquePath } from '../src/storage.js';
+import { storeText, storeFile, storeFolder, uniquePath, createDirectory, createFile, sanitizeSegment } from '../src/storage.js';
 import { readEntries } from '../src/chatLog.js';
 
 let root: string;
@@ -73,5 +73,71 @@ describe('storage', () => {
     expect(entry.type).toBe('folder');
     expect(existsSync(join(root, 'Privy Cloud', 'Folders', 'assets', 'css', 'app.css'))).toBe(true);
     expect(existsSync(join(root, 'Privy Cloud', 'Folders', 'assets', 'img', 'logo.png'))).toBe(true);
+  });
+});
+
+describe('create', () => {
+  it('createDirectory makes a folder at the root and returns its rel path', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    const rel = await createDirectory(root, '', 'New Folder');
+    expect(rel).toBe('New Folder');
+    expect(statSync(join(root, 'Privy Cloud', rel)).isDirectory()).toBe(true);
+  });
+
+  it('createDirectory makes a nested folder under a parent', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    const rel = await createDirectory(root, 'Documents', 'notes');
+    expect(rel).toBe('Documents/notes');
+    expect(statSync(join(root, 'Privy Cloud', rel)).isDirectory()).toBe(true);
+  });
+
+  it('createFile writes content and returns its rel path', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    const rel = await createFile(root, 'Markdown', 'note.md', Buffer.from('# hi', 'utf8'));
+    expect(rel).toBe('Markdown/note.md');
+    expect(readFileSync(join(root, 'Privy Cloud', rel), 'utf8')).toBe('# hi');
+  });
+
+  it('create throws EXISTS on a collision and never overwrites', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    await createDirectory(root, '', 'dup');
+    await expect(createDirectory(root, '', 'dup')).rejects.toMatchObject({ code: 'EXISTS' });
+    await createFile(root, 'Markdown', 'note.md', Buffer.from('a'));
+    await expect(createFile(root, 'Markdown', 'note.md', Buffer.from('b'))).rejects.toMatchObject({ code: 'EXISTS' });
+    expect(readFileSync(join(root, 'Privy Cloud', 'Markdown', 'note.md'), 'utf8')).toBe('a');
+  });
+
+  it('create rejects unsafe names', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    for (const bad of ['../evil', '.hidden', 'a/b', 'a\\b', '..', '']) {
+      await expect(createDirectory(root, '', bad)).rejects.toMatchObject({ code: 'INVALID_NAME' });
+    }
+  });
+
+  it('create rejects parents inside the internal .privy dir', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    mkdirSync(join(root, 'Privy Cloud', '.privy', 'trash'), { recursive: true });
+    await expect(createDirectory(root, '.privy', 'x')).rejects.toMatchObject({ code: 'UNSAFE_PARENT' });
+    await expect(createFile(root, '.privy/trash', 'x.txt', Buffer.from('x'))).rejects.toMatchObject({ code: 'UNSAFE_PARENT' });
+  });
+
+  it('createDirectory rejects a parent that is a file', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    await createFile(root, 'Markdown', 'note.md', Buffer.from('x'));
+    await expect(createDirectory(root, 'Markdown/note.md', 'sub')).rejects.toMatchObject({ code: 'PARENT_NOT_DIR' });
+  });
+
+  it('sanitizeSegment caps names at 255 bytes, not 255 characters', () => {
+    expect(sanitizeSegment('x'.repeat(255))).toBe('x'.repeat(255));
+    expect(sanitizeSegment('x'.repeat(256))).toBeNull();
+    // 100 emoji = 400 UTF-8 bytes, even though .length is only 100.
+    expect(sanitizeSegment('💾'.repeat(100))).toBeNull();
   });
 });
