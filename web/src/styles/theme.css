@@ -81,3 +81,9 @@ button { font: inherit; cursor: pointer; }
 .ctx-menu-icon { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
 .ctx-menu-sep { border-top: 1px solid var(--border); margin: 4px 6px; }
 .tile-rename-input { width: 100%; background: var(--inputbg); border: 1px solid var(--accent); border-radius: 6px; color: var(--text); font-size: 13px; padding: 4px 6px; margin-top: 6px; outline: none; }
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 1001; }
+.confirm-dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; max-width: 360px; box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+.confirm-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.confirm-text { font-size: 13px; color: var(--muted); margin-bottom: 16px; word-break: break-all; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.btn.danger { background: var(--danger); color: #fff; border-color: transparent; font-weight: 600; }

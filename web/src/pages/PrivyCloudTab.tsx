@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KINDS, type ChatEntry, type FileItem, type Kind } from '@privy/shared';
 import { api } from '../api';
 import { connect } from '../ws';
@@ -9,6 +9,8 @@ import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { usePrivyHermes } from '../hermes/usePrivyHermes';
 import { itemsForLocation, type Location } from '../sharingLocation';
+import { ContextMenu } from '../components/ContextMenu';
+import { buildMenu, type MenuAction, type MenuContext } from '../contextMenu';
 
 /** The chat API returns newest-first; reverse to chronological so the latest message is at the bottom. */
 function chronological<T>(entries: T[]): T[] {
@@ -27,6 +29,9 @@ export function PrivyCloudTab() {
   const [rootDir, setRootDir] = useState('');
   const [creating, setCreating] = useState<null | 'folder' | 'file'>(null);
   const [newName, setNewName] = useState('');
+  const [menu, setMenu] = useState<{ x: number; y: number; ctx: MenuContext } | null>(null);
+  const [renaming, setRenaming] = useState<FileItem | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<TrashItem | null>(null);
 
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
@@ -109,10 +114,6 @@ export function PrivyCloudTab() {
     try { await api.restoreFromTrash(path); void refresh(); void refreshTrash(); }
     catch (e) { setError((e as Error).message); }
   };
-  const deleteItem = async (path: string) => {
-    try { await api.deleteFromTrash(path); void refreshTrash(); }
-    catch (e) { setError((e as Error).message); }
-  };
 
   const canCreate = loc.type === 'home' || loc.type === 'folder';
   const parentRel = loc.type === 'folder' ? loc.path : '';
@@ -125,6 +126,64 @@ export function PrivyCloudTab() {
       setCreating(null); setNewName('');
       void refresh();
     } catch (e) { setError((e as Error).message); }
+  };
+
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  const openMenu = useCallback((e: React.MouseEvent, ctx: MenuContext) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY, ctx });
+  }, []);
+
+  const handleMenuAction = async (action: MenuAction, ctx: MenuContext) => {
+    closeMenu();
+    if (action === 'new-folder') { setCreating('folder'); setNewName(''); return; }
+    if (action === 'new-file') { setCreating('file'); setNewName(''); return; }
+    if (ctx.kind === 'trash') {
+      const t = ctx.item;
+      if (action === 'restore') { await restoreItem(t.path); return; }
+      if (action === 'delete-forever') { setConfirmDelete(t); return; }
+      return;
+    }
+    if (ctx.kind !== 'item') return; // background menu: new-folder/new-file handled above
+    const item = ctx.item;
+    if (action === 'open') { handleTileSelect(item); return; }
+    if (action === 'download' && !item.isDir) {
+      const a = document.createElement('a');
+      a.href = api.fileUrl(item.path);
+      a.download = item.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    if (action === 'rename') { setRenaming(item); return; }
+    if (action === 'trash') { await trashFile(item.path); return; }
+    // 'share' is disabled and never dispatched.
+  };
+
+  const commitRename = async (item: FileItem, newName: string) => {
+    const value = newName.trim();
+    if (!value || value === item.name) { setRenaming(null); return; }
+    try {
+      const res = await api.rename(item.path, value);
+      setRenaming(null);
+      if (loc.type === 'folder' && loc.path === item.path) {
+        navigate({ type: 'folder', path: res.path });
+      } else if (loc.type === 'folder' && loc.path.startsWith(item.path + '/')) {
+        navigate({ type: 'folder', path: res.path + loc.path.slice(item.path.length) });
+      }
+      void refresh();
+    } catch (e) { setError((e as Error).message); setRenaming(null); }
+  };
+  const cancelRename = useCallback(() => setRenaming(null), []);
+
+  const confirmDeleteForever = async () => {
+    if (!confirmDelete) return;
+    try { await api.deleteFromTrash(confirmDelete.path); void refreshTrash(); }
+    catch (e) { setError((e as Error).message); }
+    setConfirmDelete(null);
   };
 
   const rightPanel = (
@@ -171,22 +230,26 @@ export function PrivyCloudTab() {
                 </span>
               )}
             </div>
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto' }} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}>
               {loc.type === 'trash' ? (
                 <div className="trash-list">
                   {trashItems.length === 0 && <div className="empty-state">Trash is empty.</div>}
                   {trashItems.map((t) => (
-                    <div key={t.path} className="trash-row">
+                    <div key={t.path} className="trash-row" onContextMenu={(e) => openMenu(e, { kind: 'trash', item: t })}>
                       <span>{t.isDir ? '📁' : '📄'} {t.path}</span>
                       <span style={{ flex: 1 }} />
                       <button className="btn" onClick={() => restoreItem(t.path)}>Restore</button>
-                      <button className="btn" onClick={() => deleteItem(t.path)}>Delete forever</button>
+                      <button className="btn" onClick={() => setConfirmDelete(t)}>Delete forever</button>
                     </div>
                   ))}
                 </div>
               ) : (
                 <SharingGrid items={viewItems} onSelect={handleTileSelect}
-                  emptyMessage={loc.type === 'recent' ? 'Nothing here yet — send something from the chat.' : 'This folder is empty.'} />
+                  emptyMessage={loc.type === 'recent' ? 'Nothing here yet — send something from the chat.' : 'This folder is empty.'}
+                  onTileContextMenu={(e, item) => openMenu(e, { kind: 'item', item })}
+                  renaming={renaming?.path ?? null}
+                  onCommitRename={(item, name) => void commitRename(item, name)}
+                  onCancelRename={cancelRename} />
               )}
             </div>
           </div>
@@ -199,6 +262,22 @@ export function PrivyCloudTab() {
       </div>
       {rightPanel}
       {error && <div className="toast">{error}</div>}
+      {menu && buildMenu(menu.ctx).length > 0 && (
+        <ContextMenu x={menu.x} y={menu.y} items={buildMenu(menu.ctx)}
+          onSelect={(a) => void handleMenuAction(a, menu.ctx)} onClose={closeMenu} />
+      )}
+      {confirmDelete && (
+        <div className="confirm-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">Delete forever?</div>
+            <div className="confirm-text">Permanently delete “{confirmDelete.path}”? This can’t be undone.</div>
+            <div className="confirm-actions">
+              <button className="btn" onClick={() => setConfirmDelete(null)}>Cancel</button>
+              <button className="btn danger" onClick={() => void confirmDeleteForever()}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
