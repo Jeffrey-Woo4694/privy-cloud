@@ -1,4 +1,4 @@
-export type Kind = 'image' | 'video' | 'slide' | 'document' | 'markdown' | 'folder' | 'other';
+export type Kind = 'image' | 'video' | 'slide' | 'document' | 'markdown' | 'audio' | 'archive' | 'folder' | 'other';
 
 export interface KindMeta { key: Kind; label: string; icon: string; folder: string; extensions: string[] }
 
@@ -7,6 +7,8 @@ export const KINDS: KindMeta[] = [
   { key: 'video',    label: 'Videos',    icon: '🎬', folder: 'Videos',    extensions: ['mp4','mov','webm','mkv','avi'] },
   { key: 'slide',    label: 'Slides',    icon: '📑', folder: 'Slides',    extensions: ['ppt','pptx','key','odp'] },
   { key: 'document', label: 'Documents', icon: '📄', folder: 'Documents', extensions: ['pdf','doc','docx','xls','xlsx','odt','csv','json','xml'] },
+  { key: 'audio',    label: 'Audio',     icon: '🎧', folder: 'Audio',     extensions: ['mp3','wav','flac','ogg','aac','m4a'] },
+  { key: 'archive',  label: 'Archives',  icon: '🗜️', folder: 'Archives',  extensions: ['zip','tar','gz','tgz'] },
   { key: 'markdown', label: 'Markdown',  icon: '📝', folder: 'Markdown',  extensions: ['md','markdown','txt'] },
   { key: 'folder',   label: 'Folders',   icon: '📁', folder: 'Folders',   extensions: [] },
   { key: 'other',    label: 'Other',     icon: '📦', folder: 'Other',     extensions: [] },
