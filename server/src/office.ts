@@ -117,8 +117,14 @@ export class OfficeProvider {
     const name = basename(rel);
     if (!isOfficeEditable(name)) throw httpError('NOT_OFFICE', 'not an office document');
     if (this.locked.has(rel)) throw httpError('LOCKED', 'already being edited');
-    const abs = resolveSafe(privyBase(this.getRoot()), rel);
+    const base = privyBase(this.getRoot());
+    const abs = resolveSafe(base, rel);
     if (!abs || !existsSync(abs)) throw httpError('NOT_FOUND', 'not found');
+    // `.privy` is backend-internal (proxies, backups, trash, chat log) — never let a
+    // client open an office session inside it. Backups are themselves .docx/.xlsx,
+    // so a session minted here would let its callback overwrite backend state.
+    const internal = join(base, '.privy');
+    if (abs === internal || abs.startsWith(internal + '/')) throw httpError('NOT_FOUND', 'not found');
     const ext = name.split('.').pop()?.toLowerCase() ?? '';
     const fileType = officeFileType(ext);
     if (!fileType) throw httpError('NOT_OFFICE', 'not an office document');
@@ -185,11 +191,14 @@ export class OfficeProvider {
     // Only status 2 (content saved) and 6 (force save) carry a downloadable url.
     if ((status === 2 || status === 6) && typeof body?.url === 'string' && body.url) {
       try {
-        const data = await this.fetchSave(body.url as string);
         const abs = resolveSafe(privyBase(this.getRoot()), s.rel);
-        if (!abs) return { error: 1 };
+        // Spec §8: re-resolve the current path. If the file was moved/trashed while
+        // the editor was open, fail the save rather than silently recreating it at
+        // the stale minted path.
+        if (!abs || !existsSync(abs)) return { error: 1 };
+        const data = await this.fetchSave(body.url as string);
         // Backup the pre-overwrite bytes, then atomic-replace (temp + rename).
-        if (existsSync(abs)) await writeBackup(this.getRoot(), s.rel, readFileSync(abs));
+        await writeBackup(this.getRoot(), s.rel, readFileSync(abs));
         mkdirSync(dirname(abs), { recursive: true });
         const tmp = join(dirname(abs), `.tmp-${randomBytes(6).toString('hex')}-${basename(s.rel)}`);
         await writeFile(tmp, data);

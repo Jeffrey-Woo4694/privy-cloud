@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRootStructure } from '../src/directory.js';
@@ -78,5 +78,25 @@ describe('office provider', () => {
     const sessions = (p as unknown as { sessions: Map<string, { rel: string; expiresAt: number }> }).sessions;
     sessions.get(info1.token!)!.expiresAt = Date.now() - 1;
     expect(p.createSession('Documents/d.docx').enabled).toBe(true);
+  });
+
+  it('fails a save whose file was moved/trashed mid-edit (no stale-path write)', async () => {
+    const p = await makeProvider();
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'e.docx'), 'ORIGINAL');
+    const info = p.createSession('Documents/e.docx');
+    rmSync(join(root, 'Privy Cloud', 'Documents', 'e.docx')); // moved/trashed while open
+    const result = await p.handleCallback(info.token!, { status: 2, url: 'http://127.0.0.1:1/e.docx' });
+    expect(result.error).toBe(1);
+    // The stale path must not be recreated.
+    expect(existsSync(join(root, 'Privy Cloud', 'Documents', 'e.docx'))).toBe(false);
+  });
+
+  it('refuses to open an office session for a .privy-backed path', async () => {
+    const p = await makeProvider();
+    const backups = join(root, 'Privy Cloud', '.privy', 'backups', 'Documents');
+    mkdirSync(backups, { recursive: true });
+    writeFileSync(join(backups, 'a.docx'), 'x'); // a real .docx backup file
+    expect(() => p.createSession('.privy/backups/Documents/a.docx')).toThrow();
   });
 });
