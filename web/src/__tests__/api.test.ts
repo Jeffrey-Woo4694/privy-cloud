@@ -40,4 +40,16 @@ describe('api', () => {
     const r = await api.hermesCall('session.list', { limit: 5 });
     expect(r).toEqual({ sessions: [{ id: 'a', title: 't' }] });
   });
+
+  it('rename POSTs path and newName to /api/rename', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok({ path: 'b.txt' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { api } = await import('../api');
+    const r = await api.rename('a.txt', 'b.txt');
+    expect(r.path).toBe('b.txt');
+    const call = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(call[0]).toContain('/api/rename');
+    expect(call[1].method).toBe('POST');
+    expect(JSON.parse(String(call[1].body))).toEqual({ path: 'a.txt', newName: 'b.txt' });
+  });
 });

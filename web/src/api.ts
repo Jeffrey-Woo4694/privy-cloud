@@ -62,4 +62,6 @@ export const api = {
     req('/api/items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentPath, name, kind: 'folder' }) }),
   createFile: (parentPath: string, name: string, content = ''): Promise<{ path: string }> =>
     req('/api/items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentPath, name, kind: 'file', content }) }),
+  rename: (path: string, newName: string): Promise<{ path: string }> =>
+    req('/api/rename', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, newName }) }),
 };
