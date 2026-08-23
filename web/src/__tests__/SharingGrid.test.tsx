@@ -22,7 +22,7 @@ describe('SharingGrid', () => {
   });
 
   it('fires onTileContextMenu with the item and lets the caller preventDefault', () => {
-    const onTileContextMenu = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
+    const onTileContextMenu = vi.fn((e: { preventDefault: () => void; defaultPrevented: boolean }, _item: FileItem) => e.preventDefault());
     render(<SharingGrid items={items} onSelect={vi.fn()} onTileContextMenu={onTileContextMenu} />);
     fireEvent.contextMenu(screen.getByText('note.md'));
     expect(onTileContextMenu).toHaveBeenCalledTimes(1);
