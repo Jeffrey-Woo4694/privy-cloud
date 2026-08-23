@@ -139,6 +139,7 @@ export async function renameItem(root: string, path: string, newName: string): P
   const base = privyBase(root);
   const oldAbs = resolveSafe(base, path);
   if (!oldAbs) throw httpError('UNSAFE', 'unsafe path');
+  if (oldAbs === base) throw httpError('UNSAFE', 'unsafe path'); // never rename the Privy Cloud root itself
   // `.privy` is backend-internal (proxies, trash, chat log) — never let a client rename inside it.
   const internal = join(base, '.privy');
   if (oldAbs === internal || oldAbs.startsWith(internal + '/')) throw httpError('UNSAFE', 'unsafe path');

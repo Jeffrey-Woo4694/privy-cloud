@@ -202,3 +202,20 @@ it('renameItem rewrites matching chat-log paths', async () => {
   await renameItem(root, 'note.md', 'renamed.md');
   expect((await readEntries(root))[0].path).toBe('renamed.md');
 });
+
+it('renameItem refuses the Privy Cloud root itself', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  // `.` and `''` normalize to the root. The storage layer receives the already-trimmed
+  // value in production (the route passes `path.trim()`); the whitespace-`path` → 400
+  // case is covered at the API layer, where `path.trim()` turns `' '` into `''`.
+  await expect(renameItem(root, '.', 'x')).rejects.toMatchObject({ code: 'UNSAFE' });
+  await expect(renameItem(root, '', 'x')).rejects.toMatchObject({ code: 'UNSAFE' });
+});
+
+it('renameItem refuses files inside the internal .privy dir', async () => {
+  root = mkdtempSync(join(tmpdir(), 'privy-'));
+  await initRootStructure(root);
+  mkdirSync(join(root, 'Privy Cloud', '.privy', 'proxies'), { recursive: true });
+  await expect(renameItem(root, '.privy/chat-log.jsonl', 'x')).rejects.toMatchObject({ code: 'UNSAFE' });
+});

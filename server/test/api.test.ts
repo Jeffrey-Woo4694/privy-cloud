@@ -371,6 +371,18 @@ describe('api', () => {
 
     const noBody = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: 'a.txt' }, headers: AUTH });
     expect(noBody.statusCode).toBe(400);
+
+    // A path that normalizes to the Privy Cloud root must be refused, not 500.
+    const rooty = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: '.', newName: 'x' }, headers: AUTH });
+    expect(rooty.statusCode).toBe(400);
+    const blank = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: ' ', newName: 'x' }, headers: AUTH });
+    expect(blank.statusCode).toBe(400);
+
+    // A client must not rename a backend-internal .privy file.
+    const privy = await app.inject({ method: 'POST', url: '/api/rename', payload: { path: '.privy/chat-log.jsonl', newName: 'x' }, headers: AUTH });
+    expect(privy.statusCode).toBe(400);
+    expect(privy.json().error).toBe('unsafe path');
+
     await app.close();
   });
 });
