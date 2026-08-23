@@ -286,9 +286,23 @@ import { writeFile } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { privyBase } from './directory.js';
 
+// rel must be a relative, dot-free, slash-separated path naming a file. Reject
+// absolutes, `..`, bare `.`, empty segments, backslashes, and NULs so the computed
+// backup dir can never escape `.privy/backups` — this module is the enforcement
+// point for the path-safety constraint (review fix #2).
+function assertSafeRel(rel: string): void {
+  if (rel.startsWith('/') || rel.includes('\\') || rel.includes('\0')) {
+    throw new Error('unsafe backup rel');
+  }
+  if (rel.split('/').some((s) => s === '' || s === '.' || s === '..')) {
+    throw new Error('unsafe backup rel');
+  }
+}
+
 function backupDir(root: string, rel: string): string {
-  // Keep the pointer file's own directory structure under .privy/backups, but strip
-  // path segments so we never clash with the live tree or escape the root.
+  // Keep the pointer file's own directory structure under .privy/backups, stripped of
+  // the filename segment, so we never clash with the live tree or escape the root.
+  assertSafeRel(rel);
   return join(privyBase(root), '.privy', 'backups', rel.split('/').slice(0, -1).join('/'));
 }
 
@@ -313,11 +327,20 @@ export async function pruneBackups(root: string, rel: string): Promise<void> {
   const dir = backupDir(root, rel);
   if (!existsSync(dir)) return;
   const now = Date.now();
-  const files = readdirSync(dir)
-    .map((f) => ({ f, stat: statSync(join(dir, f)) }))
-    .filter((x) => now - x.stat.mtimeMs < MAX_AGE_MS);
-  files.sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
-  files.slice(MAX_PER_REL).forEach((x) => rmSync(join(dir, x.f), { force: true }));
+  const files = readdirSync(dir).map((f) => ({ f, stat: statSync(join(dir, f)) }));
+  // Keep only the newest MAX_PER_REL backups that are also younger than MAX_AGE_MS;
+  // delete everything else (age-expired, or beyond the per-rel count) so the backup
+  // dir stays bounded over a file's lifetime (review fix #1).
+  const keep = new Set(
+    files
+      .filter((x) => now - x.stat.mtimeMs < MAX_AGE_MS)
+      .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs)
+      .slice(0, MAX_PER_REL)
+      .map((x) => x.f),
+  );
+  for (const x of files) {
+    if (!keep.has(x.f)) rmSync(join(dir, x.f), { force: true });
+  }
 }
 ```
 
@@ -325,7 +348,7 @@ export async function pruneBackups(root: string, rel: string): Promise<void> {
 
 ```ts
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, existsSync, readdirSync, statSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initRootStructure } from '../src/directory.js';
@@ -334,18 +357,42 @@ import { writeBackup } from '../src/backups.js';
 let root: string;
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
+const backupsDir = () => join(root, 'Privy Cloud', '.privy', 'backups', 'Documents');
+
 describe('backups', () => {
   it('writes a pruned backup under .privy/backups', async () => {
     root = mkdtempSync(join(tmpdir(), 'privy-'));
     await initRootStructure(root);
     mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
     await writeBackup(root, 'Documents/report.docx', Buffer.from('old bytes'));
-    const dir = join(root, 'Privy Cloud', '.privy', 'backups', 'Documents');
+    const dir = backupsDir();
     expect(existsSync(dir)).toBe(true);
     const files = readdirSync(dir);
     expect(files.length).toBe(1);
     // the backup holds the pre-overwrite bytes
     expect(statSync(join(dir, files[0])).size).toBe('old bytes'.length);
+  });
+
+  it('prunes backups older than the age horizon', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    await writeBackup(root, 'Documents/report.docx', Buffer.from('fresh'));
+    const dir = backupsDir();
+    const stale = join(dir, 'stale.docx');
+    writeFileSync(stale, Buffer.from('stale'));
+    const longAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    utimesSync(stale, longAgo, longAgo);
+    await writeBackup(root, 'Documents/report.docx', Buffer.from('fresh2'));
+    expect(existsSync(stale)).toBe(false);
+  });
+
+  it('rejects a rel that would escape .privy/backups', async () => {
+    root = mkdtempSync(join(tmpdir(), 'privy-'));
+    await initRootStructure(root);
+    await expect(writeBackup(root, 'Documents/../../secret.docx', Buffer.from('x'))).rejects.toThrow();
+    await expect(writeBackup(root, '/abs/secret.docx', Buffer.from('x'))).rejects.toThrow();
+    // nothing escaped into the live tree
+    expect(existsSync(join(root, 'Privy Cloud', 'Documents', 'secret.docx'))).toBe(false);
   });
 });
 ```
