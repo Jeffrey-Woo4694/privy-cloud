@@ -73,13 +73,20 @@ export class OfficeProvider {
     return createHmac('sha256', this.secret).update(payload).digest('hex');
   }
 
-  private mintToken(rel: string, fileType: 'word' | 'cell' | 'slide', key: string, expiresAt: number): string {
+  /** Sign only the expiry + a random nonce. The rel/fileType/key the original
+   *  payload carried are never read (validateToken/streamFile/handleCallback all
+   *  source those from the in-memory session map; only `valid` is consulted), and
+   *  embedding them forced a `|`-delimited rel that parseToken later split —
+   *  corrupting any filename containing `|` (reachable: sanitizeSegment allows it,
+   *  and uploads use basename(fileName) unchecked). Expiry is still enforced via
+   *  the session map's expiresAt, so the token need not carry it. */
+  private mintToken(expiresAt: number): string {
     const nonce = randomBytes(8).toString('hex');
-    const payload = `${rel}|${fileType}|${key}|${expiresAt}|${nonce}`;
+    const payload = `${expiresAt}|${nonce}`;
     return `${this.sign(payload)}.${Buffer.from(payload).toString('base64url')}`;
   }
 
-  private parseToken(token: string): { valid: boolean; payload?: { rel: string; fileType: 'word' | 'cell' | 'slide'; key: string; expiresAt: number } } {
+  private parseToken(token: string): { valid: boolean } {
     const idx = token.indexOf('.');
     if (idx < 0) return { valid: false };
     const mac = token.slice(0, idx);
@@ -87,16 +94,26 @@ export class OfficeProvider {
     let payload: string;
     try { payload = Buffer.from(b64, 'base64url').toString('utf8'); }
     catch { return { valid: false }; }
-    const expected = this.sign(payload);
-    if (mac !== expected) return { valid: false };
-    const [rel, fileType, key, expStr] = payload.split('|');
-    const expiresAt = Number(expStr);
-    if (!rel || !key || !Number.isFinite(expiresAt)) return { valid: false };
-    return { valid: true, payload: { rel, fileType: fileType as 'word' | 'cell' | 'slide', key, expiresAt } };
+    return this.sign(payload) === mac ? { valid: true } : { valid: false };
+  }
+
+  /** Drop sessions past TTL and release their locks. Called on each session touch
+   *  (createSession + validateToken) so an abandoned or already-saved session never
+   *  leaves the map growing unboundedly or a file permanently locked: a rel whose
+   *  session expired can be reopened. Bounds the map to the TTL window. */
+  private sweepExpired(): void {
+    const now = Date.now();
+    for (const [token, s] of this.sessions) {
+      if (now > s.expiresAt) {
+        this.sessions.delete(token);
+        this.locked.delete(s.rel);
+      }
+    }
   }
 
   createSession(rel: string): OfficeSessionInfo {
     if (!this.isConfigured()) return { enabled: false };
+    this.sweepExpired(); // release any abandoned lock before the LOCKED check
     const name = basename(rel);
     if (!isOfficeEditable(name)) throw httpError('NOT_OFFICE', 'not an office document');
     if (this.locked.has(rel)) throw httpError('LOCKED', 'already being edited');
@@ -107,7 +124,7 @@ export class OfficeProvider {
     if (!fileType) throw httpError('NOT_OFFICE', 'not an office document');
     const key = this.docKey(rel);
     const expiresAt = Date.now() + SESSION_TTL_MS;
-    const token = this.mintToken(rel, fileType, key, expiresAt);
+    const token = this.mintToken(expiresAt);
     this.sessions.set(token, { rel, fileType, key, expiresAt, saved: false });
     this.locked.add(rel);
     const port = process.env.PRIVY_PORT ?? '5178';
@@ -125,6 +142,7 @@ export class OfficeProvider {
   /** Validate a token without consuming it (the engine fetches the file, then POSTs a
    *  save with the same token). Returns the session or null when unknown/expired/saved. */
   validateToken(token: string): ServerSession | null {
+    this.sweepExpired();
     const parsed = this.parseToken(token);
     if (!parsed.valid) return null;
     const s = this.sessions.get(token);
