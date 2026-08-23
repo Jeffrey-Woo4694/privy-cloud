@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,7 +7,7 @@ import { OfficeProvider } from '../src/office.js';
 
 let root: string;
 const noop = () => {};
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => { rmSync(root, { recursive: true, force: true }); vi.unstubAllGlobals(); });
 
 async function makeProvider(engineUrl = 'http://docs.example') {
   root = mkdtempSync(join(tmpdir(), 'privy-off-'));
@@ -86,6 +86,10 @@ describe('office provider', () => {
     writeFileSync(join(root, 'Privy Cloud', 'Documents', 'e.docx'), 'ORIGINAL');
     const info = p.createSession('Documents/e.docx');
     rmSync(join(root, 'Privy Cloud', 'Documents', 'e.docx')); // moved/trashed while open
+    // Stub fetch so the engine's save delivery succeeds. Without the fix the stale
+    // path would then be recreated (this test would FAIL); with the fix the early
+    // existsSync return prevents both the fetch and the write.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => Buffer.from('EDITED').buffer })));
     const result = await p.handleCallback(info.token!, { status: 2, url: 'http://127.0.0.1:1/e.docx' });
     expect(result.error).toBe(1);
     // The stale path must not be recreated.
