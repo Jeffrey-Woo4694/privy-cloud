@@ -87,3 +87,5 @@ button { font: inherit; cursor: pointer; }
 .confirm-text { font-size: 13px; color: var(--muted); margin-bottom: 16px; word-break: break-all; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn.danger { background: var(--danger); color: var(--danger-ink); border-color: transparent; font-weight: 600; }
+.structured-table { border-collapse: collapse; border: 1px solid var(--border); }
+.structured-table td, .structured-table th { border: 1px solid var(--border); padding: 4px 8px; }
