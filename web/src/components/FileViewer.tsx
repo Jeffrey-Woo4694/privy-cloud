@@ -2,17 +2,29 @@ import { useEffect, useState } from 'react';
 import type { FileItem } from '@privy/shared';
 import { api, API_BASE } from '../api';
 import { getToken } from '../auth';
+import { editorFor } from '../fileEditor';
+import { DocEditor } from './DocEditor';
 import { MarkdownEditor } from './MarkdownEditor';
+import { TextFileEditor } from './TextFileEditor';
+import { StructuredViewer } from './StructuredViewer';
+import { AudioPlayer } from './AudioPlayer';
+import { ArchiveInfo } from './ArchiveInfo';
 
 export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem; onBack(): void; onSaved(): void; onTrash?: (path: string) => void }) {
   const url = `${API_BASE}/api/file?path=${encodeURIComponent(item.path)}&token=${encodeURIComponent(getToken() ?? '')}`;
   const [text, setText] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [editingText, setEditingText] = useState(false);
+  const [textLoaded, setTextLoaded] = useState(false);
+  const mode = editorFor(item.name);
 
   useEffect(() => {
-    if (item.kind === 'markdown') api.getFileText(item.path).then(setText);
-  }, [item.path, item.kind]);
+    if (mode === 'text' || mode === 'structured' || mode === 'markdown') {
+      setTextLoaded(false);
+      api.getFileText(item.path).then(setText).finally(() => setTextLoaded(true));
+    }
+  }, [item.path, mode]);
 
   useEffect(() => { setVideoFailed(false); setImageFailed(false); }, [item.path]);
 
@@ -25,10 +37,11 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
         {(item.kind === 'video' || item.kind === 'image') && <a className="btn" href={url} download={item.name}>Download original</a>}
         {onTrash && <button className="btn" onClick={() => onTrash(item.path)} title="Move to trash">🗑️ Trash</button>}
       </div>
-      {item.kind === 'markdown' && (
-        <MarkdownEditor path={item.path} initialText={text}
-          onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />
-      )}
+      {mode === 'markdown' && textLoaded && <MarkdownEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
+      {mode === 'text' && textLoaded && <TextFileEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
+      {mode === 'structured' && textLoaded && (editingText
+        ? <TextFileEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); setEditingText(false); }} />
+        : <StructuredViewer name={item.name} text={text} onEdit={() => setEditingText(true)} />)}
       {item.kind === 'image' && (
         <div className="viewer-body">
           {item.proxyPending ? (
@@ -63,10 +76,11 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
           )}
         </div>
       )}
-      {item.kind === 'document' && item.name.toLowerCase().endsWith('.pdf') && (
-        <div className="viewer-body"><iframe src={url} title={item.name} style={{ width: '100%', height: '100%', border: 'none' }} /></div>
-      )}
-      {((item.kind === 'document' && !item.name.toLowerCase().endsWith('.pdf')) || item.kind === 'slide' || item.kind === 'other') && (
+      {mode === 'audio' && <AudioPlayer path={item.path} name={item.name} />}
+      {mode === 'archive' && <ArchiveInfo item={item} />}
+      {mode === 'pdf' && <div className="viewer-body"><iframe src={url} title={item.name} style={{ width: '100%', height: '100%', border: 'none' }} /></div>}
+      {mode === 'office' && <DocEditor path={item.path} name={item.name} onSaved={onSaved} onTrash={onTrash} />}
+      {mode === 'none' && item.kind !== 'image' && item.kind !== 'video' && item.kind !== 'folder' && (
         <div className="viewer-body">
           <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
             <div style={{ fontSize: 40 }}>📄</div>
@@ -75,9 +89,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
           </div>
         </div>
       )}
-      {item.kind === 'folder' && (
-        <div className="viewer-body"><div style={{ color: 'var(--muted)' }}>Folders are shown in the sharing grid — browse them by opening files.</div></div>
-      )}
+      {item.kind === 'folder' && <div className="viewer-body"><div style={{ color: 'var(--muted)' }}>Folders are shown in the sharing grid — browse them by opening files.</div></div>}
     </div>
   );
 }
