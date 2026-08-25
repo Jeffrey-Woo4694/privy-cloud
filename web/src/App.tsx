@@ -24,7 +24,9 @@ const MOBILE_TABS: Array<{ key: Tab; label: string; icon: string }> = [
 ];
 
 function Shell({ onLogout }: { onLogout(): void }) {
-  const [tab, setTab] = useState<Tab>('hermes');
+  // The default view is Privy Cloud (the file-sharing + Hermes chat), for every
+  // entry point — desktop shell, browser web, and phone web.
+  const [tab, setTab] = useState<Tab>('privy');
   const { theme, toggle } = useTheme();
   const isMobile = useMediaQuery('(max-width: 820px)');
   const [drawerOpen, setDrawerOpen] = useState(false);

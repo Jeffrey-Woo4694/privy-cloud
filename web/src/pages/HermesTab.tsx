@@ -76,9 +76,10 @@ export function HermesTab() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [slashItems, setSlashItems] = useState<{ text: string }[]>([]);
-  // On mobile hide the session sidebar so the chat fills the small screen
-  // (session switching remains on the desktop layout for now).
+  // On mobile the session sidebar becomes a slide-over (toggled from the header),
+  // so the chat fills the small screen while sessions stay reachable.
   const isMobile = useMediaQuery('(max-width: 820px)');
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   // Slash-command autocomplete: while the composer starts with `/`, debounce a
   // `complete.slash` call and render suggestions. The `send` bridge already
@@ -152,8 +153,40 @@ export function HermesTab() {
     if (fileRef.current) fileRef.current.value = '';
   };
 
+  // The session list, shared by the desktop sidebar and the mobile slide-over.
+  // Selecting a session closes the mobile overlay (harmless when it's not open).
+  const sessionList = (
+    <>
+      <button className="btn primary" onClick={() => { setSessionsOpen(false); newSession(); }}>＋ New session</button>
+      <button className="btn" onClick={() => { setSessionsOpen(false); void mostRecent(); }}>↻ Reopen last</button>
+      {sessions.length === 0 && (
+        <div style={{ color: 'var(--muted)', fontSize: 12, padding: '4px 2px' }}>No sessions yet.</div>
+      )}
+      {sessions.map((s) => {
+        const active = s.id === activeSessionId;
+        return (
+          <button
+            key={s.id}
+            className="btn"
+            onClick={() => { setSessionsOpen(false); resume(s.id); }}
+            aria-pressed={active}
+            style={{
+              textAlign: 'left',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              ...(active ? { background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600 } : {}),
+            }}
+          >
+            {s.title}
+          </button>
+        );
+      })}
+    </>
+  );
+
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
+    <div style={{ display: 'flex', height: '100%', position: 'relative' }}>
       {state.pendingApproval && (
         <HermesApprovalDialog prompt={state.pendingApproval} onRespond={respondApproval} />
       )}
@@ -173,36 +206,15 @@ export function HermesTab() {
           overflowY: 'auto',
         }}
       >
-        <button className="btn primary" onClick={newSession}>＋ New session</button>
-        <button className="btn" onClick={() => { void mostRecent(); }}>↻ Reopen last</button>
-        {sessions.length === 0 && (
-          <div style={{ color: 'var(--muted)', fontSize: 12, padding: '4px 2px' }}>No sessions yet.</div>
-        )}
-        {sessions.map((s) => {
-          const active = s.id === activeSessionId;
-          return (
-            <button
-              key={s.id}
-              className="btn"
-              onClick={() => resume(s.id)}
-              aria-pressed={active}
-              style={{
-                textAlign: 'left',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                ...(active ? { background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 600 } : {}),
-              }}
-            >
-              {s.title}
-            </button>
-          );
-        })}
+        {sessionList}
       </aside>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="panel-title">Hermes Agent</div>
+          {isMobile && (
+            <button className="btn" aria-label="sessions" onClick={() => setSessionsOpen(true)} style={{ marginLeft: 8 }}>☰ Sessions</button>
+          )}
           {state.sessionId && (
             <div style={{ position: 'relative' }}>
               <button
@@ -323,6 +335,21 @@ export function HermesTab() {
           </button>
         </div>
       </div>
+      {sessionsOpen && (
+        <>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 40 }} onClick={() => setSessionsOpen(false)} />
+          <div
+            className="session-sheet"
+            style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 'min(72vw, 250px)', background: 'var(--panel)', borderRight: '1px solid var(--border)', zIndex: 41, display: 'flex', flexDirection: 'column', gap: 6, padding: 10, overflowY: 'auto' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>Sessions</span>
+              <button className="btn" aria-label="close sessions" onClick={() => setSessionsOpen(false)}>✕</button>
+            </div>
+            {sessionList}
+          </div>
+        </>
+      )}
     </div>
   );
 }

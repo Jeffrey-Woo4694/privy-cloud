@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { App } from '../App';
 
 // Mock the api module so App's on-load token validation and the tabs' fetches
@@ -30,11 +30,10 @@ vi.mock('../api', () => ({
 describe('App', () => {
   beforeEach(() => localStorage.setItem('privy-token', 't'));
 
-  it('boots into the Hermes tab', async () => {
+  it('boots into the Privy Cloud tab', async () => {
     render(<App />);
-    // The on-load validation resolves, then the shell mounts.
-    expect(await screen.findByPlaceholderText(/Ask Hermes/)).toBeInTheDocument();
-    expect(document.querySelector('.tab.active')?.textContent).toContain('Hermes Agent');
+    // The on-load validation resolves, then the shell mounts with Privy Cloud active.
+    await waitFor(() => expect(document.querySelector('.tab.active')?.textContent).toContain('Privy Cloud'));
   });
 
   it('switches tabs and theme', async () => {
