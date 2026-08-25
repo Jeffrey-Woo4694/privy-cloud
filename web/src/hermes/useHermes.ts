@@ -120,6 +120,12 @@ export function useHermes(): {
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  // Tracks whether we've seen a `hermes:status: disconnected`. A `connected`
+  // that follows a disconnect means the backend restarted `hermes serve`, so the
+  // live `session_id` went stale and the session must be re-resumed by its
+  // durable key. The initial connect (no prior disconnect) is skipped.
+  const everDisconnectedRef = useRef(false);
+
   const refreshSessions = useCallback(() => {
     api
       .hermesCall('session.list', { limit: 200 })
@@ -132,6 +138,39 @@ export function useHermes(): {
   useEffect(() => {
     const disconnect = connect({
       onHermesEvent: (e) => {
+        // `hermes:status` is a ServerEvent frame the relay forwards as its own
+        // pseudo-event (see ws.ts); it is NOT part of the AgentEvent union, so
+        // probe it as a loose shape rather than intersecting with AgentEvent.
+        const ev = e.event as { type?: string; status?: string };
+        // Gateway reconnect detection. `ws.ts` forwards `hermes:status` into
+        // `onHermesEvent` as its own event. After a disconnect, a fresh
+        // `hermes serve` invalidates the live `session_id`, so re-resume the
+        // bound session by its durable key (mirrors Native-Hermes).
+        if (ev.type === 'hermes:status') {
+          if (ev.status === 'disconnected') {
+            everDisconnectedRef.current = true;
+          } else if (ev.status === 'connected' && everDisconnectedRef.current) {
+            const key = stateRef.current.sessionKey;
+            if (key) {
+              api
+                .hermesCall('session.resume', { session_id: key })
+                .then((result) => {
+                  const r = (result ?? {}) as SessionResumed;
+                  if (!r.session_id) return;
+                  const durable = r.session_key ?? r.stored_session_id ?? key;
+                  setState((s) => ({
+                    ...resyncMessages(s, parseResumeMessages(r)),
+                    sessionId: r.session_id,
+                    sessionKey: durable,
+                  }));
+                })
+                .catch(() => {
+                  // Re-resume failed — the session still accepts new prompts.
+                });
+            }
+          }
+          return;
+        }
         setState((s) => applyAgentEvent(s, e.event));
         // Keep the sidebar in sync as turns complete (the reference debounces
         // this; v1 refreshes directly — one `session.list` RPC per turn).

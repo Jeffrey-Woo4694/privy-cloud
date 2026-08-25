@@ -236,4 +236,25 @@ describe('useHermes bridge', () => {
     expect(hermesCall).toHaveBeenCalledWith('session.resume', { session_id: 'k9' });
     expect(result.current.state.sessionId).toBe('live-k9');
   });
+
+  it('re-resumes the bound session after a disconnect → reconnect', async () => {
+    hermesCall.mockImplementation(async (method: string) => {
+      if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+      if (method === 'session.list') return { sessions: [] };
+      if (method === 'session.resume') return { session_id: 'live-k1', session_key: 'k1', messages: [{ role: 'user', text: 'resynced msg' }] };
+      return {};
+    });
+    const result = await mount();
+    hermesCall.mockClear();
+
+    // A genuine reconnect: the gateway drops, then comes back.
+    emit({ type: 'hermes:status', status: 'disconnected' });
+    emit({ type: 'hermes:status', status: 'connected' });
+    await act(async () => {});
+
+    expect(hermesCall).toHaveBeenCalledWith('session.resume', { session_id: 'k1' });
+    expect(result.current.state.sessionId).toBe('live-k1');
+    expect(result.current.state.sessionKey).toBe('k1');
+    expect(result.current.state.messages.some((m) => m.role === 'user' && m.text === 'resynced msg')).toBe(true);
+  });
 });
