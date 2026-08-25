@@ -8,6 +8,31 @@
 
 **Tech Stack:** React 18, TypeScript, Vitest + Testing Library, existing `@privy/shared`.
 
+## Progress
+
+Executed on the `feat/hermes-parity` branch. Full web suite green: **22 files / 191 tests**.
+
+- ✅ **Task 1** extend types — `feat(hermes): extend HermesState/types for feature parity`
+- ✅ **Task 2** reducer semantics — `feat(hermes): implement full agent-event reducer semantics` (49 reducer tests)
+- ✅ **Task 3** bridge actions — `feat(hermes): bridge actions for model/approval/clarify/slash/attachments/session` (15 `useHermes` tests)
+- ✅ **Task 4** reconnect re-resume — `feat(hermes): auto re-resume active session on reconnect`
+- ✅ **Task 5** model/effort picker — `feat(hermes): composer model/effort picker`
+- ✅ **Task 6** approval + clarify dialogs — `feat(hermes): permission and clarify dialogs`
+- ✅ **Task 7** process strip — `feat(hermes): per-message process strip`
+- ⛔ **Task 8** attachments — **BLOCKED** (see below)
+- ✅ **Task 9** slash autocomplete — `feat(hermes): slash command autocomplete`
+- ✅ **Task 10** session actions menu — `feat(hermes): session actions menu (archive/rename/delete/recent)`
+- ✅ **Task 11** web suite green (22/191); server smoke still to run
+
+### Task 8 blocker — browser-side file attachment needs a server path
+
+`image.attach` / `file.attach` take a **gateway-readable filesystem path** (`{ session_id, path }`). A browser file picker (this is a webview, not a native GTK app) yields a `File` object with **no server-side path** — the Tauri webview sandbox won't expose the OS path. So a purely client-side attach cannot produce the `path` the gateway needs. To make attachments real, one of these is required (needs a decision, and possibly a small server change):
+
+1. **Upload→attach** (no server change, best-effort): `POST /api/send/file` already stores the file under `Privy Cloud/` and returns a relative `path`; call `image.attach`/`file.attach` with that path. Works only if the session's gateway `cwd` can resolve that relative path. Uncertain.
+2. **Server staging endpoint** (small server change): upload to a gateway-visible temp dir under `HERMES_HOME`, return an absolute path, then attach. Deterministic but touches the server (which the plan otherwise avoids).
+
+Recommended: option 1 as a first cut (reuses existing endpoints, the file also lands in the shared library — useful for the `@hermes` bot regardless), with option 2 as the robust follow-up. Not shipped yet in this pass — flagged for review before implementing.
+
 ## Global Constraints
 
 - The reducer must remain **pure + immutable** — every handler returns a new state; never mutate the input. Existing tests at `web/src/__tests__/reducer.test.ts:291-340` enforce this.
