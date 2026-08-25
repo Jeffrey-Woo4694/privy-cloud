@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
@@ -17,6 +17,7 @@ import type { AgentEvent } from '../hermes/events.js';
 import type { HermesManager, HermesStatus } from '../hermes/manager.js';
 import { getHermesHome } from '../hermes/serve.js';
 import { listTrash, trashPath, restoreTrashPath, deleteTrashPath } from '../trash.js';
+import { writeBackup } from '../backups.js';
 import type { OfficeProvider } from '../office.js';
 
 export type ServerEvent =
@@ -163,6 +164,13 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     }
   });
 
+  app.delete('/api/office/session', async (req, reply) => {
+    const office = ctx.office;
+    const token = ((req.body ?? {}) as { token?: string; }).token ?? ((req.query as { token?: string }).token ?? '');
+    office?.endSession(token);
+    return { ok: true };
+  });
+
   app.get('/api/office/file', async (req, reply) => {
     const office = ctx.office;
     const token = (req.query as { token?: string }).token ?? '';
@@ -215,6 +223,9 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
       return reply.code(400).send({ error: 'not an editable text file' });
     }
     const { content } = (req.body ?? {}) as { content?: string };
+    // Text edits (incl. autosave) overwrite in place — back up the prior bytes first,
+    // so an autosaved edit never destroys the previous version. Bounded same as office.
+    await writeBackup(ctx.getRoot(), rel, readFileSync(abs));
     await writeFile(abs, content ?? '', 'utf8');
     ctx.emit({ type: 'items:changed', path: rel, change: 'modified' });
     return { ok: true, modifiedAt: new Date().toISOString() };

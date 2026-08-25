@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/index.js';
@@ -85,6 +85,23 @@ describe('api', () => {
     // the PNG bytes are untouched
     const img = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('Documents/pic.png'), headers: AUTH });
     expect(img.body).toBe('x');
+    await app.close();
+  });
+
+  it('PUT /api/file backs up the prior bytes before overwriting (safe to autosave text)', async () => {
+    const app = await boot();
+    mkdirSync(join(root, 'Privy Cloud', 'Markdown'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Markdown', 'notes.md'), 'ORIGINAL TEXT');
+    const saved = await app.inject({ method: 'PUT', url: '/api/file?path=' + encodeURIComponent('Markdown/notes.md'), payload: { content: 'EDITED' }, headers: AUTH });
+    expect(saved.statusCode).toBe(200);
+    // The live file is the new content.
+    const got = await app.inject({ method: 'GET', url: '/api/file?path=' + encodeURIComponent('Markdown/notes.md'), headers: AUTH });
+    expect(got.body).toBe('EDITED');
+    // The prior bytes were preserved as a version backup under .privy/backups.
+    const backups = readdirSync(join(root, 'Privy Cloud', '.privy', 'backups', 'Markdown'));
+    expect(backups.some((f) => f.endsWith('-notes.md'))).toBe(true);
+    const backup = readFileSync(join(root, 'Privy Cloud', '.privy', 'backups', 'Markdown', backups[backups.length - 1]), 'utf8');
+    expect(backup).toBe('ORIGINAL TEXT');
     await app.close();
   });
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
+import { Markdown } from '../components/Markdown';
 import type { Message, ToolCard } from '../hermes/types';
 
 const ROLE_ICON: Record<Message['role'], string> = { user: '🧑', assistant: '🤖', steer: '🎯' };
@@ -26,7 +27,10 @@ function MessageView({ msg }: { msg: Message }) {
       <div className="chat-icon">{ROLE_ICON[msg.role]}</div>
       <div className="chat-bubble">
         {msg.role === 'steer' && <span style={{ color: 'var(--muted)', fontSize: 11, display: 'block' }}>mid-turn steer</span>}
-        {msg.text ? <span>{msg.text}</span> : msg.role === 'assistant' && msg.tools.length === 0 && <span>…</span>}
+        {msg.text && (msg.role === 'assistant'
+          ? <Markdown>{msg.text}</Markdown>
+          : <span>{msg.text}</span>)}
+        {!msg.text && msg.role === 'assistant' && msg.tools.length === 0 && <span>…</span>}
         {msg.tools.map((t) => <ToolCardView key={t.id} tool={t} />)}
       </div>
     </div>

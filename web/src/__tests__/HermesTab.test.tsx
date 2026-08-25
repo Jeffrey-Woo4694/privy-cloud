@@ -208,4 +208,19 @@ describe('HermesTab', () => {
     expect(screen.getByRole('button', { name: 'k2' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /fix login test/i })).toHaveAttribute('aria-pressed', 'false');
   });
+
+  it('renders an assistant reply as markdown (bold becomes a strong element)', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    emit({ type: 'message.start' });
+    emit({ type: 'message.complete', text: '**hi**', status: 'ok' });
+
+    const strong = await waitFor(() => {
+      const el = document.querySelector('strong');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(strong.textContent).toBe('hi');
+  });
 });

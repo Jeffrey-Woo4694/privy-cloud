@@ -28,6 +28,19 @@ export function MarkdownEditor({ path, initialText, onSave }: { path: string; in
   const saveRef = useRef(save);
   useEffect(() => { saveRef.current = save; });
 
+  // Autosave: save ~1.2s after the last keystroke. Each save is backed up server-side
+  // (bounded version history), so autosaving never destroys the prior content. The
+  // timer is reset on every change, so a continuous typing burst saves once it pauses.
+  const autosaveTimer = useRef<number | null>(null);
+  useEffect(() => {
+    return () => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); };
+  }, []);
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = window.setTimeout(() => saveRef.current(), 1200);
+  };
+
   // Ctrl+S / Cmd+S saves the file and prevents the browser's default "Save Page".
   // Attached at the window so it works wherever focus is inside the editor, and
   // removed on unmount so it never leaks beyond this view.
@@ -49,7 +62,7 @@ export function MarkdownEditor({ path, initialText, onSave }: { path: string; in
         <button className="btn primary" onClick={save} disabled={saving} title="Ctrl+S">{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}</button>
       </div>
       {error && <div className="editor-error">{error}</div>}
-      <textarea value={content} onChange={(e) => setContent(e.target.value)} spellCheck={false} />
+      <textarea value={content} onChange={handleChange} spellCheck={false} />
     </div>
   );
 }

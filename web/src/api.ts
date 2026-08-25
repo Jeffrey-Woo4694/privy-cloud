@@ -66,4 +66,6 @@ export const api = {
     req('/api/rename', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, newName }) }),
   officeSession: (path: string): Promise<{ enabled: boolean; token?: string; key?: string; fileUrl?: string; callbackUrl?: string; engineUrl?: string; fileType?: string; title?: string; expiresAt?: string }> =>
     req(`/api/office/session?path=${encodeURIComponent(path)}`),
+  endOfficeSession: (token: string): Promise<{ ok: boolean }> =>
+    req('/api/office/session', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) }),
 };

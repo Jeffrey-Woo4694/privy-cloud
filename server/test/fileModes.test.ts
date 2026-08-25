@@ -16,6 +16,20 @@ describe('fileModes', () => {
     expect(isTextEditable('image.png')).toBe(false);
     expect(isTextEditable('movie.mp4')).toBe(false);
   });
+  it('code source files are editable as text so the code view can save', () => {
+    expect(isTextEditable('main.cpp')).toBe(true);
+    expect(isTextEditable('Foo.java')).toBe(true);
+    expect(isTextEditable('app.py')).toBe(true);
+    expect(isTextEditable('App.cs')).toBe(true);
+    expect(isTextEditable('image.png')).toBe(false);
+  });
+  it('markup, style and build-manifest files are editable as text', () => {
+    expect(isTextEditable('index.html')).toBe(true);
+    expect(isTextEditable('style.css')).toBe(true);
+    expect(isTextEditable('Widget.vue')).toBe(true);
+    expect(isTextEditable('Dockerfile')).toBe(true);
+    expect(isTextEditable('movie.mp4')).toBe(false);
+  });
   it('officeFileType maps ext to word/cell/slide', () => {
     expect(officeFileType('docx')).toBe('word');
     expect(officeFileType('xlsx')).toBe('cell');

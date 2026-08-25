@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { KINDS, type ChatEntry, type Kind } from '@privy/shared';
 import type { PrivyBotMessage } from '../hermes/usePrivyHermes';
+import { Markdown } from './Markdown';
 import { api } from '../api';
 
 const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
@@ -33,7 +34,10 @@ function BotEntry({ m }: { m: PrivyBotMessage }) {
       <div className="chat-icon">{m.role === 'assistant' ? '🤖' : '🧑'}</div>
       <div className={`chat-bubble${m.role === 'assistant' ? ' chat-bot' : ''}`}>
         {m.role === 'assistant' && <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12, display: 'block' }}>Hermes</span>}
-        {m.text || (m.streaming ? '…' : '')}
+        {m.text && (m.role === 'assistant'
+          ? <Markdown>{m.text}</Markdown>
+          : <span>{m.text}</span>)}
+        {!m.text && m.streaming && '…'}
         {m.streaming && <span className="chat-time">thinking…</span>}
       </div>
     </div>

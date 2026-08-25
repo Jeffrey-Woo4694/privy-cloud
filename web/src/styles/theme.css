@@ -10,9 +10,11 @@
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
-/* Always reserve the vertical scrollbar so tab content that's 1px taller (or
-   scrolls) doesn't toggle the scrollbar and reflow the layout width. */
-html { overflow-y: scroll; }
+/* Scroll the page only when content genuinely overflows. Content that scrolls
+   (the sharing grid, chat, code view) does so inside its own panels, so an
+   always-on document scrollbar just adds a second, idle bar next to the panel's.
+   The 1px-taller reflow the scrollbar used to prevent is handled by the panels. */
+html { overflow-y: auto; }
 body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; }
 button { font: inherit; cursor: pointer; }
 .tab-bar { display: flex; gap: 6px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; }
@@ -63,11 +65,21 @@ button { font: inherit; cursor: pointer; }
 .btn { background: var(--chipbg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 10px; font-size: 13px; }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 .back-link { background: none; border: none; color: var(--accent); font-size: 13px; padding: 4px 0; }
-.editor { display: flex; flex-direction: column; height: 100%; }
+.editor { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; }
 .editor-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
 .editor-error { color: var(--danger); font-size: 12px; margin-bottom: 8px; }
 .editor textarea { flex: 1; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 14px; padding: 10px; resize: none; outline: none; }
+/* CodeMirror mount (CodeEditor): constrain the whole .cm-theme > .cm-editor >
+   .cm-scroller chain so the editor fills the surface and CM's scroller owns the
+   scrolling (no runaway content height, no outer scrollbar). */
+.codeeditor-mount { flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.codeeditor-mount .cm-theme { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.codeeditor-mount .cm-editor { flex: 1; min-height: 0; min-width: 0; }
+.codeeditor-mount .cm-scroller { flex: 1; overflow: auto; }
 .viewer { display: flex; flex-direction: column; height: 100%; }
+/* Expanded editor: cover the whole interface (top tab bar + left sharing panel +
+   right chat panel) with a fixed, full-viewport theme-colored layer. */
+.viewer-fullscreen { position: fixed; inset: 0; z-index: 1002; background: var(--bg); padding: 8px 12px; }
 .viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
 .viewer-body img, .viewer-body video { max-width: 100%; max-height: 100%; }
 .placeholder-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; color: var(--muted); }
@@ -89,3 +101,169 @@ button { font: inherit; cursor: pointer; }
 .btn.danger { background: var(--danger); color: var(--danger-ink); border-color: transparent; font-weight: 600; }
 .structured-table { border-collapse: collapse; border: 1px solid var(--border); }
 .structured-table td, .structured-table th { border: 1px solid var(--border); padding: 4px 8px; }
+
+/* ---- Agent markdown (Hermes tab + chat bot) ----------------------------
+   The code-block header (language + copy button) is the signature element;
+   the prose stays quiet and every color comes from the existing CSS tokens
+   below, so it re-themes automatically with the app's light/dark toggle. */
+
+:root[data-theme='dark'] {
+  --md-code-bg: #242830;
+  --md-code-fg: #b3bdc9;
+  --code-head-bg: #2b3039;
+  --md-keyword: #c678dd;
+  --md-string: #98c379;
+  --md-number: #d19a66;
+  --md-function: #61afef;
+  --md-builtin: #56b6c2;
+  --md-comment: #5f6a7d;
+  --md-variable: #e06c75;
+  --md-operator: #56b6c2;
+  --md-attr: #d19a66;
+  --md-meta: #61afef;
+  --md-literal: #56b6c2;
+  --md-type: #e5c07b;
+}
+
+:root[data-theme='light'] {
+  --md-code-bg: #f4f6f9;
+  --md-code-fg: #3b4048;
+  --code-head-bg: #ebeef3;
+  --md-keyword: #a626a4;
+  --md-string: #50a14f;
+  --md-number: #986801;
+  --md-function: #4078f2;
+  --md-builtin: #0184bc;
+  --md-comment: #a0a5ac;
+  --md-variable: #e45649;
+  --md-operator: #0184bc;
+  --md-attr: #986801;
+  --md-meta: #4078f2;
+  --md-literal: #0184bc;
+  --md-type: #c18401;
+}
+
+/* Prose. First/last children drop their margin so the bubble's own padding
+   keeps the vertical rhythm; rest is token-driven. */
+.markdown { color: var(--text); }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p { margin: 0 0 .5em; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 {
+  font-weight: 650; line-height: 1.3; margin: .7em 0 .3em;
+}
+.markdown h1 { font-size: 1.25em; }
+.markdown h2 { font-size: 1.15em; }
+.markdown h3 { font-size: 1.05em; }
+.markdown h4 { font-size: 1em; }
+.markdown a { color: var(--accent); font-weight: 500; text-decoration: none; }
+.markdown a:hover { text-decoration: underline; }
+.markdown ul, .markdown ol { margin: .3em 0 .5em; padding-left: 1.4em; }
+.markdown li { margin: .15em 0; }
+.markdown ul.contains-task-list { list-style: none; padding-left: 1.1em; }
+.markdown blockquote {
+  border-left: 3px solid var(--accent); margin: .5em 0; padding: .15em 0 .15em .8em;
+  color: var(--muted);
+}
+.markdown hr { height: 1px; border: none; background: var(--border); margin: .6em 0; }
+.markdown table {
+  display: block; overflow-x: auto; border-collapse: collapse; margin: .5em 0;
+  max-width: 100%; font-size: .95em;
+}
+.markdown th, .markdown td { border: 1px solid var(--border); padding: 4px 8px; }
+.markdown th { background: var(--chipbg); font-weight: 600; }
+.markdown tbody tr:nth-child(odd) { background: var(--chipbg); }
+
+/* Inline code — a muted pill. A <code> inside <pre> (a block) resets to
+   transparent mono with no pill so the codeblock owns the styling. */
+.markdown code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: .92em; background: var(--chipbg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 5px;
+}
+.markdown pre code { background: none; border: none; padding: 0; border-radius: 0; }
+/* A code block emitted without a language tag — no header/copy, but still a
+   proper scrolling code container so multi-line snippets keep their shape. */
+.markdown pre.md-plain {
+  margin: .5em 0; background: var(--md-code-bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px; line-height: 1.55; color: var(--md-code-fg);
+}
+.markdown pre.md-plain code { background: none; border: none; padding: 0; border-radius: 0; }
+
+/* Code block — the signature: rounded container, header row (language + copy
+   button), scrollable token-highlighted body. */
+.codeblock {
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  margin: .5em 0; background: var(--code-head-bg);
+}
+.codeblock-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; background: var(--code-head-bg); border-bottom: 1px solid var(--border);
+}
+.codeblock-lang {
+  font-size: 11px; color: var(--muted); text-transform: lowercase;
+  letter-spacing: .02em; font-family: ui-monospace, Menlo, monospace;
+}
+.codeblock-copy {
+  background: transparent; border: none; color: var(--muted); font-size: 11px;
+  cursor: pointer; padding: 2px 6px; border-radius: 4px; font-family: inherit;
+}
+.codeblock-copy:hover { color: var(--text); background: var(--chipbg); }
+.codeblock-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.codeblock pre {
+  margin: 0; padding: 10px 12px; overflow-x: auto; background: var(--md-code-bg);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px; line-height: 1.55; color: var(--md-code-fg);
+}
+.codeblock pre code { color: var(--md-code-fg); background: none; border: none; padding: 0; }
+
+/* lowlight / highlight.js token colors, driven by the tokens above. Both the
+   markdown fenced blocks and the CodeViewer surface share this one palette. */
+.markdown .hljs-keyword, .markdown .hljs-selector-tag,
+.codeviewer .hljs-keyword, .codeviewer .hljs-selector-tag { color: var(--md-keyword); }
+.markdown .hljs-string, .markdown .hljs-regexp,
+.codeviewer .hljs-string, .codeviewer .hljs-regexp { color: var(--md-string); }
+.markdown .hljs-number, .codeviewer .hljs-number { color: var(--md-number); }
+.markdown .hljs-attr, .markdown .hljs-attribute,
+.codeviewer .hljs-attr, .codeviewer .hljs-attribute { color: var(--md-attr); }
+.markdown .hljs-title, .markdown .hljs-title.function_,
+.codeviewer .hljs-title, .codeviewer .hljs-title.function_ { color: var(--md-function); }
+.markdown .hljs-built_in, .markdown .hljs-name,
+.codeviewer .hljs-built_in, .codeviewer .hljs-name { color: var(--md-builtin); }
+.markdown .hljs-comment, .markdown .hljs-quote,
+.codeviewer .hljs-comment, .codeviewer .hljs-quote { color: var(--md-comment); font-style: italic; }
+.markdown .hljs-literal, .codeviewer .hljs-literal { color: var(--md-literal); }
+.markdown .hljs-type, .markdown .hljs-class,
+.codeviewer .hljs-type, .codeviewer .hljs-class { color: var(--md-type); }
+.markdown .hljs-variable, .markdown .hljs-template-variable,
+.codeviewer .hljs-variable, .codeviewer .hljs-template-variable { color: var(--md-variable); }
+.markdown .hljs-operator, .codeviewer .hljs-operator { color: var(--md-operator); }
+.markdown .hljs-meta, .codeviewer .hljs-meta { color: var(--md-meta); }
+
+/* Rendered markdown viewer (MarkdownViewer): a scrollable, formatted .md preview
+   with an "Edit as markdown" toggle in the head. Reuses .markdown for typography. */
+.mdviewer { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.mdviewer-head { display: flex; align-items: center; gap: 8px; padding: 2px 2px 8px; }
+.mdviewer-body { flex: 1; min-height: 0; overflow: auto; }
+
+/* Full-file code viewer (CodeViewer): reuses the .codeblock chrome for the header
+   and adds a line-number gutter that scrolls in lockstep with the highlighted body. */
+.codeviewer { margin: 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.codeviewer-large-note { color: var(--muted); font-size: 12px; padding: 6px 10px 0; }
+.codeviewer-name { font-size: 12px; font-weight: 600; color: var(--text); font-family: ui-monospace, Menlo, monospace; }
+.codeviewer-meta { font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+/* .codeviewer-body is the ONE scroll region (both axes). The <pre> must NOT scroll
+   (overflow-x alone coerces overflow-y to auto → a second vertical bar); it lets its
+   content flow and the body scrolls. The gutter is sticky-left so line numbers stay
+   pinned while the code scrolls horizontally. */
+.codeviewer-body { flex: 1; min-height: 0; display: flex; overflow: auto; background: var(--md-code-bg); }
+.codeviewer-gutter {
+  position: sticky; left: 0; flex: 0 0 auto; align-self: flex-start;
+  padding: 10px 10px 10px 12px; text-align: right; user-select: none;
+  color: var(--muted); background: var(--code-head-bg); border-right: 1px solid var(--border);
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.55;
+  white-space: pre;
+}
+.codeviewer pre.codeviewer-code { flex: 1; min-width: 0; margin: 0; padding: 10px 12px; overflow: visible; white-space: pre; background: none; }

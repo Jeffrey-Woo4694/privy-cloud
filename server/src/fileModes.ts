@@ -4,8 +4,21 @@ export const OFFICE_EDITABLE_EXT = new Set([
 
 export const TEXT_EXTENSIONS = new Set([
   'md', 'markdown', 'txt', 'log', 'csv', 'json', 'xml', 'yaml', 'yml',
-  'html', 'css', 'js', 'jsx', 'ts', 'tsx', 'py', 'sh', 'sql', 'ini', 'toml',
-  'conf', 'env', 'gitignore', 'jsonl',
+  'ini', 'toml', 'conf', 'env', 'gitignore', 'jsonl',
+  // Code source / markup / style files: the CodeViewer's Edit toggle saves back through
+  // PUT /api/file, so these must be accepted as editable text. Keep in sync with the
+  // web fileEditor.ts CODE set.
+  'c', 'h', 'cc', 'cpp', 'cxx', 'hh', 'hpp', 'hxx', 'm', 'mm',
+  'java', 'class', 'jsp', 'cs', 'go', 'rs', 'rb', 'php', 'py', 'pyi',
+  'js', 'mjs', 'cjs', 'jsx', 'ts', 'mts', 'cts', 'tsx', 'sh', 'bash', 'zsh', 'fish',
+  'sql', 'swift', 'kt', 'kts', 'scala', 'groovy', 'dart', 'lua', 'pl', 'pm', 'r',
+  'pas', 'vb', 'vbs', 'fs', 'fsx', 'cls', 'asm', 's', 'zig', 'nim', 'hs',
+  'ex', 'exs', 'erl', 'hrl', 'ml', 'mli', 'clj', 'cljs', 'el', 'rkt',
+  'html', 'htm', 'xhtml', 'css', 'scss', 'less', 'sass', 'styl', 'vue', 'svelte',
+  'astro', 'hbs', 'ejs', 'tpl', 'liquid', 'razor', 'cshtml', 'mdx', 'jsonc',
+  'graphql', 'gql', 'proto', 'thrift',
+  'cmake', 'gradle', 'properties', 'tf', 'tfvars', 'hcl', 'nix', 'dhall', 'plist',
+  'dockerfile', 'makefile', 'rakefile', 'gemfile', 'procfile',
 ]);
 
 export function extOf(name: string): string {

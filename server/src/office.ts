@@ -18,7 +18,10 @@ export interface OfficeConfig {
 
 export interface ServerSession {
   rel: string;
+  /** Editor-type tag (word/cell/slide) — maps to the engine's top-level `documentType`. */
   fileType: 'word' | 'cell' | 'slide';
+  /** The canonical file extension (docx/xlsx/pptx/…), used verbatim as the engine's `document.fileType`. */
+  fileExt: string;
   key: string;
   expiresAt: number;
   saved: boolean;
@@ -32,6 +35,7 @@ export interface OfficeSessionInfo {
   callbackUrl?: string;
   engineUrl?: string;
   fileType?: 'word' | 'cell' | 'slide';
+  fileExt?: string;
   title?: string;
   expiresAt?: string;
 }
@@ -117,6 +121,12 @@ export class OfficeProvider {
     const name = basename(rel);
     if (!isOfficeEditable(name)) throw httpError('NOT_OFFICE', 'not an office document');
     if (this.locked.has(rel)) throw httpError('LOCKED', 'already being edited');
+    // A session that was released on unmount (rel not in `locked`) is abandoned:
+    // the user is reopening the file, so the fresh session is authoritative and a
+    // stale close-time save (a token we're about to evict) must not race it.
+    for (const [token, s] of this.sessions) {
+      if (s.rel === rel) this.sessions.delete(token);
+    }
     const base = privyBase(this.getRoot());
     const abs = resolveSafe(base, rel);
     if (!abs || !existsSync(abs)) throw httpError('NOT_FOUND', 'not found');
@@ -131,18 +141,30 @@ export class OfficeProvider {
     const key = this.docKey(rel);
     const expiresAt = Date.now() + SESSION_TTL_MS;
     const token = this.mintToken(expiresAt);
-    this.sessions.set(token, { rel, fileType, key, expiresAt, saved: false });
+    this.sessions.set(token, { rel, fileType, fileExt: ext, key, expiresAt, saved: false });
     this.locked.add(rel);
     const port = process.env.PRIVY_PORT ?? '5178';
     const origin = `http://host.containers.internal:${port}`;
     return {
-      enabled: true, token, key, fileType,
+      enabled: true, token, key, fileType, fileExt: ext,
       fileUrl: `${origin}/api/office/file?token=${encodeURIComponent(token)}`,
       callbackUrl: `${origin}/api/office/callback?token=${encodeURIComponent(token)}`,
       engineUrl: this.engineUrl,
       title: name,
       expiresAt: new Date(expiresAt).toISOString(),
     };
+  }
+
+  /** End a session released on editor unmount: release the lock so the file can be
+   *  reopened, but KEEP the session in the map so a close-time save (status 0/2 from
+   *  the engine) can still persist the edit. `createSession` evicts a released session
+   *  when the same file is reopened, making the fresh session authoritative. */
+  endSession(token: string): void {
+    const parsed = this.parseToken(token);
+    if (!parsed.valid) return;
+    const s = this.sessions.get(token);
+    if (!s) return;
+    this.locked.delete(s.rel);
   }
 
   /** Validate a token without consuming it (the engine fetches the file, then POSTs a
@@ -185,9 +207,21 @@ export class OfficeProvider {
   }
 
   async handleCallback(token: string, body: Record<string, unknown>): Promise<{ error: number }> {
+    const status = Number(body?.status ?? 0);
+    // Status 0 = the editor closed without a save (user navigated away). Release the
+    // lock so the file can be reopened; the session stays for any later callback. Even
+    // a STALE token (session evicted by a reopen, or expired) is harmless here — the
+    // close "failed" only because a newer session became authoritative. Acknowledge it
+    // (error 0) rather than telling the engine the document failed to handle, which
+    // would make it retain a recovery copy (slow reopen + the "server backup copy"
+    // warning). A real save (status 2/6) with an invalid token is still rejected below.
+    if (status === 0) {
+      const s = this.validateToken(token);
+      if (s) this.locked.delete(s.rel);
+      return { error: 0 };
+    }
     const s = this.validateToken(token);
     if (!s) return { error: 1 };
-    const status = Number(body?.status ?? 0);
     // Only status 2 (content saved) and 6 (force save) carry a downloadable url.
     if ((status === 2 || status === 6) && typeof body?.url === 'string' && body.url) {
       try {

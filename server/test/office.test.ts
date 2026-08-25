@@ -29,6 +29,10 @@ describe('office provider', () => {
     expect(info.enabled).toBe(true);
     expect(info.token).toBeTruthy();
     expect(info.fileUrl).toContain('token=');
+    // The engine's `document.fileType` wants the real extension (docx), not the
+    // editor-type tag (word) — the tag rides along separately as `fileType`.
+    expect(info.fileType).toBe('word');
+    expect(info.fileExt).toBe('docx');
     expect(() => p.createSession('Documents/a.docx')).toThrow(); // locked
     expect(p.validateToken(info.token!)).toBeTruthy();
   });
@@ -51,6 +55,45 @@ describe('office provider', () => {
     // is proven end-to-end in the Task 5 integration test, not here.
     const result = await p.handleCallback(info.token!, { status: 2, url: 'data:text/plain,EDITED' });
     expect(result.error).toBe(1);
+  });
+
+  it('endSession releases a lock so the same file can be reopened (navigate-away bug)', async () => {
+    const p = await makeProvider();
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'f.docx'), 'x');
+    const info1 = p.createSession('Documents/f.docx');
+    expect(() => p.createSession('Documents/f.docx')).toThrow(); // locked while open
+    p.endSession(info1.token!); // editor unmounted → release the lock
+    const info2 = p.createSession('Documents/f.docx'); // reopen now succeeds
+    expect(info2.enabled).toBe(true);
+    expect(info2.token).not.toBe(info1.token);
+    // The fresh session is authoritative: a stale close-save on the old token is rejected.
+    expect(p.validateToken(info1.token!)).toBeNull();
+    expect(p.validateToken(info2.token!)).toBeTruthy();
+  });
+
+  it('a status-0 callback (editor closed) releases the lock so the file can be reopened', async () => {
+    const p = await makeProvider();
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'g.docx'), 'x');
+    const info = p.createSession('Documents/g.docx');
+    await p.handleCallback(info.token!, { status: 0 });
+    expect(p.createSession('Documents/g.docx').enabled).toBe(true);
+  });
+
+  it('acknowledges a stale status-0 (closed) callback as ok so the engine does not hold a recovery copy', async () => {
+    const p = await makeProvider();
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'h.docx'), 'x');
+    const info1 = p.createSession('Documents/h.docx');
+    p.endSession(info1.token!);             // editor unmounted → release the lock
+    const info2 = p.createSession('Documents/h.docx'); // reopen → evicts info1's session
+    expect(info2.token).not.toBe(info1.token);
+    // The old session's engine posts status:0 (closed) with the now-stale token. With
+    // the fix this is harmless (error 0); without it, the engine is told the document
+    // failed to handle → it retains a recovery copy (slow reopen + "backup copy" warning).
+    const result = await p.handleCallback(info1.token!, { status: 0 });
+    expect(result.error).toBe(0);
   });
 
   it('handles a rel containing a pipe (|) — tokens are not split on it', async () => {
