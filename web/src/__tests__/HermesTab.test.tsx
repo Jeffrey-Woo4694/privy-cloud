@@ -272,4 +272,25 @@ describe('HermesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'set A' }));
     expect(hermesCall).toHaveBeenCalledWith('clarify.respond', { session_id: 's1', request_id: 'c1', answer: 'set A' });
   });
+
+  it('renders the process strip: tool duration, subagent status, and thinking', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    emit({ type: 'message.start' });
+    emit({ type: 'tool.start', id: 't1', name: 'shell', preview: 'cargo test' });
+    emit({ type: 'tool.complete', id: 't1', name: 'shell', ok: true, duration: 1.5, resultPreview: 'ok' });
+    emit({ type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' });
+    emit({ type: 'subagent.complete', id: 'sa1', status: 'ok' });
+    emit({ type: 'thinking.delta', text: 'scratchpad' });
+    emit({ type: 'message.complete', text: 'answer', status: 'ok' });
+
+    // Tool duration + result preview shown inline.
+    expect(screen.getByText('1.5s')).toBeInTheDocument();
+    expect(screen.getByText('ok')).toBeInTheDocument();
+    // Collapsible process strip: subagent count, status, and thinking.
+    expect(screen.getByText(/1 subagent/)).toBeInTheDocument();
+    expect(screen.getByText('✓ done')).toBeInTheDocument();
+    expect(screen.getByText('scratchpad')).toBeInTheDocument();
+  });
 });

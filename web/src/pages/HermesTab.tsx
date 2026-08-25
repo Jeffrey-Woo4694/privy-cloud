@@ -4,6 +4,7 @@ import { Markdown } from '../components/Markdown';
 import { HermesModelPicker } from '../components/HermesModelPicker';
 import { HermesApprovalDialog } from '../components/HermesApprovalDialog';
 import { HermesClarifyDialog } from '../components/HermesClarifyDialog';
+import { HermesProcessStrip } from '../components/HermesProcessStrip';
 import type { Message, ToolCard } from '../hermes/types';
 
 const ROLE_ICON: Record<Message['role'], string> = { user: '🧑', assistant: '🤖', steer: '🎯' };
@@ -20,6 +21,10 @@ function ToolCardView({ tool }: { tool: ToolCard }) {
       {tool.preview && (
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{tool.preview}</span>
       )}
+      {tool.duration != null && <span style={{ opacity: 0.7 }}>{tool.duration.toFixed(1)}s</span>}
+      {tool.resultPreview && (
+        <span style={{ opacity: 0.8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{tool.resultPreview}</span>
+      )}
     </div>
   );
 }
@@ -35,6 +40,7 @@ function MessageView({ msg }: { msg: Message }) {
           : <span>{msg.text}</span>)}
         {!msg.text && msg.role === 'assistant' && msg.tools.length === 0 && <span>…</span>}
         {msg.tools.map((t) => <ToolCardView key={t.id} tool={t} />)}
+        <HermesProcessStrip msg={msg} />
       </div>
     </div>
   );
