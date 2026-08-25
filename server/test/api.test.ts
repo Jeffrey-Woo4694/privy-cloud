@@ -264,6 +264,31 @@ describe('api', () => {
     await app.close();
   });
 
+  it('POST /api/hermes/stage writes a no-space path and returns it', async () => {
+    const app = await boot();
+    const BOUNDARY = '----privy-stage';
+    const CRLF = '\r\n';
+    const body = Buffer.concat([
+      Buffer.from(`--${BOUNDARY}${CRLF}Content-Disposition: form-data; name="file"; filename="my photo.png"${CRLF}Content-Type: image/png${CRLF}${CRLF}`),
+      Buffer.from('fake-png-bytes'),
+      Buffer.from(`${CRLF}--${BOUNDARY}--${CRLF}`),
+    ]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/hermes/stage',
+      headers: { ...AUTH, 'content-type': `multipart/form-data; boundary=${BOUNDARY}` },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(200);
+    const { path, name } = res.json() as { path: string; name: string };
+    expect(name).toBe('my photo.png');
+    expect(path).not.toMatch(/\s/); // no whitespace — the gateway attach can't handle it
+    expect(path).toContain('my_photo.png'); // spaces sanitized to underscores
+    expect(existsSync(path)).toBe(true);
+    rmSync(path, { force: true });
+    await app.close();
+  });
+
   it('filters chat entries whose underlying file was deleted on disk', async () => {
     const app = await boot();
     const sent = await app.inject({ method: 'POST', url: '/api/send/text', payload: { text: 'hello', }, headers: AUTH });

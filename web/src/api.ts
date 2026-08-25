@@ -53,6 +53,14 @@ export const api = {
   fileUrl: (path: string): string => `${API_BASE}/api/file?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
   hermesCall: async (method: string, params?: unknown): Promise<unknown> =>
     (await req<{ result: unknown }>('/api/hermes/call', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ method, params }) })).result,
+  // Stage an uploaded file at a no-space path the Hermes gateway can attach
+  // (see `POST /api/hermes/stage` — the gateway's attach path can't contain
+  // spaces, so files are staged under /tmp rather than the "Privy Cloud" dir).
+  stageFile: (file: File): Promise<{ path: string; name: string }> => {
+    const fd = new FormData();
+    fd.append('file', file, file.name);
+    return req('/api/hermes/stage', { method: 'POST', body: fd });
+  },
   listHermesRoles: (): Promise<{ roles: { id: string; label: string }[] }> => req('/api/hermes/roles'),
   listTrash: (): Promise<{ items: { path: string; name: string; isDir: boolean; size: number; modifiedAt: string }[] }> => req('/api/trash'),
   trashPath: (path: string) => req('/api/trash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) }),

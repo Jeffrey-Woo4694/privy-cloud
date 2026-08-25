@@ -358,6 +358,21 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     return { roles };
   });
 
+  // Stage an uploaded file at a no-space path the Hermes gateway can attach.
+  // The gateway's `image.attach`/`file.attach` tokenize the path on whitespace,
+  // so a file staged inside the "Privy Cloud" library directory (which has a
+  // space) is not attachable. Write to a fresh /tmp dir (no space) and return
+  // the absolute path for the client to pass to the attach RPC.
+  app.post('/api/hermes/stage', async (req) => {
+    const part = await (req as unknown as { file(): Promise<UploadPart> }).file();
+    const name = part.filename ?? 'upload.bin';
+    const tmpDir = mkdtempSync(join(tmpdir(), 'privy-hermes-attach-'));
+    const safeName = basename(name).replace(/[^A-Za-z0-9._-]/g, '_') || 'upload';
+    const path = join(tmpDir, safeName);
+    await pipeline(part.file, createWriteStream(path));
+    return { path, name: basename(name) };
+  });
+
   app.post('/api/hermes/call', async (req, reply) => {
     const { method, params } = (req.body ?? {}) as { method?: string; params?: unknown };
     const hermes = ctx.hermes;

@@ -131,17 +131,13 @@ export function HermesTab() {
   const handleAttach = async (file: File) => {
     if (!file) return;
     try {
-      // The browser gives a File with no server-side path; place it in the
-      // shared library (reusing the Privy Cloud upload endpoint), then attach
-      // by the resulting gateway-addressable path. The gateway resolves `path`
-      // against its session `cwd` (the project root), so `Privy Cloud/<rel>`
-      // is readable.
-      const entries = await api.sendFiles([file]);
-      const entry = entries[0];
-      if (!entry?.path) return;
-      const gatewayPath = `Privy Cloud/${entry.path}`;
-      if (file.type.startsWith('image/')) await attachImage(gatewayPath);
-      else await attachFile(gatewayPath, file.name);
+      // The browser gives a File with no server-side path. Stage it at a
+      // no-space temp path the gateway can attach (the gateway's attach path
+      // can't contain whitespace, so the "Privy Cloud" library dir won't work),
+      // then attach by that path.
+      const { path } = await api.stageFile(file);
+      if (file.type.startsWith('image/')) await attachImage(path);
+      else await attachFile(path, file.name);
     } catch {
       // Upload or attach failed — the chip is not added.
     }

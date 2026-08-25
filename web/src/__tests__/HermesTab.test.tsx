@@ -4,13 +4,13 @@ import { HermesTab } from '../pages/HermesTab';
 
 // Mock the API + WS modules the hook depends on. `connect` captures the
 // onHermesEvent callback so tests can drive WS events through the reducer.
-const { hermesCall, connect, sendFiles } = vi.hoisted(() => ({
+const { hermesCall, connect, stageFile } = vi.hoisted(() => ({
   hermesCall: vi.fn(),
   connect: vi.fn(),
-  sendFiles: vi.fn(),
+  stageFile: vi.fn(),
 }));
 
-vi.mock('../api', () => ({ api: { hermesCall, sendFiles } }));
+vi.mock('../api', () => ({ api: { hermesCall, stageFile } }));
 vi.mock('../ws', () => ({ connect }));
 
 type WsEvent = { event: unknown; sessionId: string | null };
@@ -24,8 +24,8 @@ beforeEach(() => {
   onHermesEvent = undefined;
   hermesCall.mockReset();
   connect.mockReset();
-  sendFiles.mockReset();
-  sendFiles.mockResolvedValue([{ path: 'Images/photo.png' }]);
+  stageFile.mockReset();
+  stageFile.mockResolvedValue({ path: '/tmp/privy-hermes-attach-X/photo.png', name: 'photo.png' });
   connect.mockImplementation((cb: { onHermesEvent: (e: WsEvent) => void }) => {
     onHermesEvent = cb.onHermesEvent;
     return () => {};
@@ -377,8 +377,8 @@ describe('HermesTab', () => {
     const file = new File(['x'], 'photo.png', { type: 'image/png' });
     fireEvent.change(input, { target: { files: [file] } });
 
-    await waitFor(() => expect(sendFiles).toHaveBeenCalled());
-    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('image.attach', { session_id: 's1', path: 'Privy Cloud/Images/photo.png' }));
+    await waitFor(() => expect(stageFile).toHaveBeenCalled());
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('image.attach', { session_id: 's1', path: '/tmp/privy-hermes-attach-X/photo.png' }));
 
     // Chip appears; removing it drops the chip.
     expect(await screen.findByText('photo.png')).toBeInTheDocument();
