@@ -249,4 +249,27 @@ describe('HermesTab', () => {
     // Effort chip row renders from EFFORT_LEVELS.
     expect(screen.getByRole('button', { name: 'high' })).toBeInTheDocument();
   });
+
+  it('shows a tool-approval dialog on approval.request; Deny responds and closes it', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    emit({ type: 'approval.request', id: 'r1', command: 'cargo test', payload: {} });
+    expect(screen.getByText('cargo test')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /deny/i }));
+    expect(hermesCall).toHaveBeenCalledWith('approval.respond', { session_id: 's1', choice: 'deny', all: false });
+    expect(screen.queryByText('cargo test')).not.toBeInTheDocument();
+  });
+
+  it('shows a clarify dialog on clarify.request; a choice responds', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    emit({ type: 'clarify.request', id: 'c1', question: 'Which file?', choices: ['set A', 'set B'] });
+    expect(screen.getByText('Which file?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'set A' }));
+    expect(hermesCall).toHaveBeenCalledWith('clarify.respond', { session_id: 's1', request_id: 'c1', answer: 'set A' });
+  });
 });

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
 import { Markdown } from '../components/Markdown';
 import { HermesModelPicker } from '../components/HermesModelPicker';
+import { HermesApprovalDialog } from '../components/HermesApprovalDialog';
+import { HermesClarifyDialog } from '../components/HermesClarifyDialog';
 import type { Message, ToolCard } from '../hermes/types';
 
 const ROLE_ICON: Record<Message['role'], string> = { user: '🧑', assistant: '🤖', steer: '🎯' };
@@ -39,7 +41,7 @@ function MessageView({ msg }: { msg: Message }) {
 }
 
 export function HermesTab() {
-  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort } = useHermes();
+  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify } = useHermes();
   const [text, setText] = useState('');
   const [showPicker, setShowPicker] = useState(false);
 
@@ -68,6 +70,12 @@ export function HermesTab() {
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
+      {state.pendingApproval && (
+        <HermesApprovalDialog prompt={state.pendingApproval} onRespond={respondApproval} />
+      )}
+      {state.pendingClarify && (
+        <HermesClarifyDialog prompt={state.pendingClarify} onRespond={respondClarify} />
+      )}
       <aside
         style={{
           width: 220,
