@@ -24,9 +24,11 @@ Executed on the `feat/hermes-parity` branch. Full web suite green: **22 files / 
 - ✅ **Task 10** session actions menu — `feat(hermes): session actions menu (archive/rename/delete/recent)`
 - ✅ **Task 11** verification — web suite green (focused 21/15/49; full-suite 105 executed, all passed — worker-setup timeouts under load are infra noise, not failures); server hermes 32/32 **incl. real-gateway smoke**; live end-to-end API probes confirmed `session.create/list`, `file.attach`/`image.attach`, and `model.options` against the running Tauri backend.
 
-### Task 8 note — how the attachment blocker was resolved
+### Task 8 note — the attachment path had a space; fixed with a staging endpoint
 
-`image.attach`/`file.attach` need a gateway-readable filesystem `path`. **Verified against the live gateway:** the Hermes session's `info.cwd` is the project root, and the gateway resolves both absolute and cwd-relative `path`s. So a browser-picked file is uploaded to the shared library via `POST /api/send/file` and attached by `Privy Cloud/<relpath>` (relative to the session cwd). No server change. Side effect (intended): attached files also land in the user's Privy Cloud library, making them available to the `@hermes` bot.
+`image.attach`/`file.attach` need a gateway-readable filesystem `path`. **Verified against the live gateway:** the gateway resolves absolute and cwd-relative paths — **but it tokenizes the path on whitespace**, so a path containing a space fails (`image not found: …`). The Hermes session `cwd` is the project root, but the shared library dir is literally `Privy Cloud` (with a space), so uploading to the library and attaching by `Privy Cloud/<rel>` **does not work**. Also confirmed `/tmp` no-space absolute paths attach fine.
+
+**Fix (small server change):** added `POST /api/hermes/stage` — writes the uploaded file to a fresh `/tmp` dir (no space), sanitizing the filename, and returns the absolute path; the web client then calls `image.attach`/`file.attach` with it. This is a deliberate exception to the "no server changes" guideline, justified by the verified whitespace limitation. Side effect: attached files are staged in `/tmp` (not persisted in the library — no pollution).
 
 ## Global Constraints
 
