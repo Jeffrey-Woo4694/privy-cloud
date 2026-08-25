@@ -195,7 +195,7 @@ export function PrivyCloudTab() {
 
   if (selected) {
     return (
-      <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%' }}>
+      <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%', height: '100%', minWidth: 0 }}>
         <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} onTrash={trashFile} />
         </div>
@@ -206,7 +206,7 @@ export function PrivyCloudTab() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%' }}>
+    <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%', height: '100%', minWidth: 0 }}>
       <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
           <SharingSidebar location={loc} onSelect={navigate} />

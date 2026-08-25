@@ -14,14 +14,14 @@ html, body, #root { height: 100%; margin: 0; }
    (the sharing grid, chat, code view) does so inside its own panels, so an
    always-on document scrollbar just adds a second, idle bar next to the panel's.
    The 1px-taller reflow the scrollbar used to prevent is handled by the panels. */
-html { overflow-y: auto; }
-body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; }
+html { overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; overflow: hidden; }
 button { font: inherit; cursor: pointer; }
 .tab-bar { display: flex; gap: 6px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; }
 .tab { padding: 5px 12px; border-radius: 6px; background: transparent; border: 1px solid transparent; color: var(--muted); }
 .tab.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .tab-spacer { flex: 1; }
-.app-body { display: flex; height: calc(100% - 48px); }
+.app-body { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
 .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
 .kinds { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
