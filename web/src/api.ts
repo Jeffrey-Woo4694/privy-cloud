@@ -3,7 +3,12 @@ import { getToken } from './auth';
 
 // Same-origin by default so the UI works when served by the backend (localhost, LAN, or tunnel).
 // Dev mode overrides via web/.env.development (VITE_API_BASE=http://localhost:5178).
-export const API_BASE: string = import.meta.env.VITE_API_BASE ?? '';
+// The Tauri desktop shell loads the UI from its custom `tauri://localhost` protocol,
+// which the backend does NOT serve — so when running under Tauri, target the local
+// backend directly (its CORS allowlist already includes the tauri origin). In a
+// browser (served by the backend, same-origin) `''` keeps it origin-relative.
+export const API_BASE: string =
+  import.meta.env.VITE_API_BASE ?? (typeof window !== 'undefined' && window.location.protocol === 'tauri:' ? 'http://localhost:5178' : '');
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers: { ...init?.headers, authorization: `Bearer ${getToken() ?? ''}` } });
