@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
 import { api } from '../api';
 import { Markdown } from '../components/Markdown';
@@ -30,6 +30,8 @@ function ToolCardView({ tool }: { tool: ToolCard }) {
   );
 }
 
+const MemoToolCardView = memo(ToolCardView);
+
 /// Download `content` as `<title>-<YYYY-MM-DD>.md`. Guarded so it no-ops where
 /// `URL.createObjectURL` is unavailable (jsdom), keeping the Archive action
 /// testable by asserting the `session.history` RPC instead.
@@ -54,12 +56,14 @@ function MessageView({ msg }: { msg: Message }) {
           ? <Markdown>{msg.text}</Markdown>
           : <span>{msg.text}</span>)}
         {!msg.text && msg.role === 'assistant' && msg.tools.length === 0 && <span>…</span>}
-        {msg.tools.map((t) => <ToolCardView key={t.id} tool={t} />)}
+        {msg.tools.map((t) => <MemoToolCardView key={t.id} tool={t} />)}
         <HermesProcessStrip msg={msg} />
       </div>
     </div>
   );
 }
+
+const MemoMessageView = memo(MessageView);
 
 export function HermesTab() {
   const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify, attachImage, attachFile, removeAttachment, archive, rename, remove, mostRecent } = useHermes();
@@ -240,7 +244,7 @@ export function HermesTab() {
           {state.messages.length === 0 && (
             <div className="empty-state">Ask your local Hermes agent anything.</div>
           )}
-          {state.messages.map((m) => <MessageView key={m.id} msg={m} />)}
+          {state.messages.map((m) => <MemoMessageView key={m.id} msg={m} />)}
         </div>
         {state.status && <div style={{ color: 'var(--muted)', fontSize: 11, padding: '4px 2px' }}>{state.status}</div>}
         {showPicker && (

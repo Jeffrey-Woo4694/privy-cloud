@@ -9,7 +9,7 @@
 // session list via `session.list`. If it fails (backend/hermes down) we stay in
 // a no-session state and `send()` no-ops gracefully — the UI never crashes.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { connect } from '../ws';
 import {
@@ -173,7 +173,10 @@ export function useHermes(): {
           }
           return;
         }
-        setState((s) => applyAgentEvent(s, e.event));
+        // Streaming deltas arrive in rapid succession; apply them in a
+        // transition so an urgent update (typing in the composer) is never
+        // starved and the UI stays responsive under heavy streaming.
+        startTransition(() => setState((s) => applyAgentEvent(s, e.event)));
         // Keep the sidebar in sync as turns complete (the reference debounces
         // this; v1 refreshes directly — one `session.list` RPC per turn).
         if ((e.event as AgentEvent).type === 'message.complete') refreshSessions();
