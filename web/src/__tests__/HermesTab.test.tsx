@@ -293,4 +293,24 @@ describe('HermesTab', () => {
     expect(screen.getByText('✓ done')).toBeInTheDocument();
     expect(screen.getByText('scratchpad')).toBeInTheDocument();
   });
+
+  it('autocompletes slash commands from complete.slash', async () => {
+    hermesCall.mockImplementation(async (method: string) => {
+      if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+      if (method === 'session.list') return { sessions: [] };
+      if (method === 'complete.slash') return { items: [{ text: '/help', meta: 'x' }, { text: '/model', meta: 'y' }] };
+      return {};
+    });
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    const input = screen.getByPlaceholderText(/Ask Hermes/);
+    fireEvent.change(input, { target: { value: '/' } });
+
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('complete.slash', { text: '/' }));
+    expect(await screen.findByRole('button', { name: '/help' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '/help' }));
+    expect(input).toHaveValue('/help');
+  });
 });

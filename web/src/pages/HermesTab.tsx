@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
+import { api } from '../api';
 import { Markdown } from '../components/Markdown';
 import { HermesModelPicker } from '../components/HermesModelPicker';
 import { HermesApprovalDialog } from '../components/HermesApprovalDialog';
@@ -50,6 +51,28 @@ export function HermesTab() {
   const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify } = useHermes();
   const [text, setText] = useState('');
   const [showPicker, setShowPicker] = useState(false);
+  const [slashItems, setSlashItems] = useState<{ text: string }[]>([]);
+
+  // Slash-command autocomplete: while the composer starts with `/`, debounce a
+  // `complete.slash` call and render suggestions. The `send` bridge already
+  // routes a leading `/` to `slash.exec` on submit.
+  useEffect(() => {
+    const t = text.trim();
+    if (!t.startsWith('/')) {
+      setSlashItems([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      api
+        .hermesCall('complete.slash', { text: t })
+        .then((r) => {
+          const items = ((r ?? {}) as { items?: Array<{ text?: unknown }> }).items ?? [];
+          setSlashItems(items.map((i) => ({ text: String(i.text ?? '') })).filter((i) => i.text));
+        })
+        .catch(() => setSlashItems([]));
+    }, 150);
+    return () => clearTimeout(handle);
+  }, [text]);
 
   // The current session is the row whose durable key (or live id) matches
   // `state.sessionKey` — the id `session.list` keys entries by.
@@ -139,6 +162,22 @@ export function HermesTab() {
               setEffort={setEffort}
               onClose={() => setShowPicker(false)}
             />
+          </div>
+        )}
+        {text.trim().startsWith('/') && slashItems.length > 0 && (
+          <div style={{ position: 'relative', marginBottom: 6 }}>
+            <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+              {slashItems.map((it) => (
+                <button
+                  key={it.text}
+                  className="btn"
+                  style={{ display: 'block', width: '100%', textAlign: 'left' }}
+                  onClick={() => { setText(it.text); setSlashItems([]); }}
+                >
+                  {it.text}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         <div className="send-input">
