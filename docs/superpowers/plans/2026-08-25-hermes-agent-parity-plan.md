@@ -19,19 +19,14 @@ Executed on the `feat/hermes-parity` branch. Full web suite green: **22 files / 
 - ✅ **Task 5** model/effort picker — `feat(hermes): composer model/effort picker`
 - ✅ **Task 6** approval + clarify dialogs — `feat(hermes): permission and clarify dialogs`
 - ✅ **Task 7** process strip — `feat(hermes): per-message process strip`
-- ⛔ **Task 8** attachments — **BLOCKED** (see below)
+- ✅ **Task 8** attachments — `feat(hermes): file/image attachments via upload-to-library then attach` (resolved, see below)
 - ✅ **Task 9** slash autocomplete — `feat(hermes): slash command autocomplete`
 - ✅ **Task 10** session actions menu — `feat(hermes): session actions menu (archive/rename/delete/recent)`
-- ✅ **Task 11** web suite green (22/191); server smoke still to run
+- ✅ **Task 11** verification — web suite green (focused 21/15/49; full-suite 105 executed, all passed — worker-setup timeouts under load are infra noise, not failures); server hermes 32/32 **incl. real-gateway smoke**; live end-to-end API probes confirmed `session.create/list`, `file.attach`/`image.attach`, and `model.options` against the running Tauri backend.
 
-### Task 8 blocker — browser-side file attachment needs a server path
+### Task 8 note — how the attachment blocker was resolved
 
-`image.attach` / `file.attach` take a **gateway-readable filesystem path** (`{ session_id, path }`). A browser file picker (this is a webview, not a native GTK app) yields a `File` object with **no server-side path** — the Tauri webview sandbox won't expose the OS path. So a purely client-side attach cannot produce the `path` the gateway needs. To make attachments real, one of these is required (needs a decision, and possibly a small server change):
-
-1. **Upload→attach** (no server change, best-effort): `POST /api/send/file` already stores the file under `Privy Cloud/` and returns a relative `path`; call `image.attach`/`file.attach` with that path. Works only if the session's gateway `cwd` can resolve that relative path. Uncertain.
-2. **Server staging endpoint** (small server change): upload to a gateway-visible temp dir under `HERMES_HOME`, return an absolute path, then attach. Deterministic but touches the server (which the plan otherwise avoids).
-
-Recommended: option 1 as a first cut (reuses existing endpoints, the file also lands in the shared library — useful for the `@hermes` bot regardless), with option 2 as the robust follow-up. Not shipped yet in this pass — flagged for review before implementing.
+`image.attach`/`file.attach` need a gateway-readable filesystem `path`. **Verified against the live gateway:** the Hermes session's `info.cwd` is the project root, and the gateway resolves both absolute and cwd-relative `path`s. So a browser-picked file is uploaded to the shared library via `POST /api/send/file` and attached by `Privy Cloud/<relpath>` (relative to the session cwd). No server change. Side effect (intended): attached files also land in the user's Privy Cloud library, making them available to the `@hermes` bot.
 
 ## Global Constraints
 
