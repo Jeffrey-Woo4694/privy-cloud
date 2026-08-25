@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addAttachment,
   applyAgentEvent,
+  clearAttachments,
   initialHermesState,
+  pushAssistant,
   pushSteer,
   pushUser,
+  removeAttachment,
   resyncMessages,
+  takeAttachments,
   undoLastTurn,
 } from '../hermes/reducer';
 import type { AgentEvent, HermesState } from '../hermes/types';
@@ -46,6 +51,8 @@ describe('agent-event reducer', () => {
     const card = s.messages[s.messages.length - 1].tools[0];
     expect(card.state).toBe('done');
     expect(card.ok).toBe(true);
+    expect(card.duration).toBe(1.5);
+    expect(card.resultPreview).toBe('ok');
   });
 
   it('later tool.generating does not uncomplete the previous tool', () => {
@@ -190,6 +197,15 @@ describe('agent-event reducer', () => {
     expect(s.messages[0].streaming).toBe(false);
   });
 
+  it('pushAssistant adds a completed assistant message', () => {
+    const s = pushAssistant(initialHermesState(), 'slash output');
+    expect(s.messages).toHaveLength(1);
+    expect(s.messages[0].role).toBe('assistant');
+    expect(s.messages[0].text).toBe('slash output');
+    expect(s.messages[0].complete).toBe(true);
+    expect(s.messages[0].streaming).toBe(false);
+  });
+
   it('undoLastTurn removes steer + assistant (with its tool card) + user', () => {
     let s = initialHermesState();
     s = pushUser(s, 'q1');
@@ -223,19 +239,19 @@ describe('agent-event reducer', () => {
     s = applyAgentEvent(s, { type: 'message.delta', text: 'stale delta' });
     expect(s.streaming).toBe(true);
 
-    s = resyncMessages(s, [
+    const out = resyncMessages(s, [
       { role: 'user', text: 'hello' },
       { role: 'assistant', text: 'hi there' },
       { role: 'tool', text: '', toolName: 'shell', toolContext: '{"cmd":"cargo build"}' },
     ]);
 
-    expect(s.streaming).toBe(false);
-    expect(s.messages).toHaveLength(2);
-    expect(s.messages[0].role).toBe('user');
-    expect(s.messages[0].text).toBe('hello');
-    expect(s.messages[0].complete).toBe(true);
+    expect(out.streaming).toBe(false);
+    expect(out.messages).toHaveLength(2);
+    expect(out.messages[0].role).toBe('user');
+    expect(out.messages[0].text).toBe('hello');
+    expect(out.messages[0].complete).toBe(true);
 
-    const assistant = s.messages[1];
+    const assistant = out.messages[1];
     expect(assistant.role).toBe('assistant');
     expect(assistant.text).toBe('hi there');
     expect(assistant.tools).toHaveLength(1);
@@ -266,25 +282,212 @@ describe('agent-event reducer', () => {
     expect(s.messages).toHaveLength(0);
   });
 
-  it('deferred events are clean no-ops', () => {
+  it('resyncMessages drops the model-switch marker', () => {
+    const s = resyncMessages(initialHermesState(), [
+      { role: 'user', text: 'hello' },
+      {
+        role: 'user',
+        text: '[System: The active model for this chat has changed to deepseek-v4-flash via provider custom. From this point forward, use this runtime metadata.]',
+      },
+      { role: 'assistant', text: 'done' },
+    ]);
+    expect(s.messages).toHaveLength(2);
+    expect(s.messages[0].text).toBe('hello');
+    expect(s.messages[1].text).toBe('done');
+  });
+
+  it('thinking buffers before message.start, then commits into the message', () => {
+    let s = initialHermesState();
+    s = applyAgentEvent(s, { type: 'thinking.delta', text: 'step one ' });
+    s = applyAgentEvent(s, { type: 'thinking.delta', text: 'step two' });
+    expect(s.messages).toHaveLength(0); // still buffered
+    expect(s.pendingThinking).toBe('step one step two');
+
+    s = startTurn(s);
+    expect(s.messages).toHaveLength(1);
+    expect(s.messages[0].thinking).toBe('step one step two');
+    expect(s.messages[0].reasoning).toBeUndefined();
+    expect(s.pendingThinking).toBe(''); // cleared after commit
+  });
+
+  it('thinking during a streaming turn appends to that message', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'thinking.delta', text: 'a' });
+    s = applyAgentEvent(s, { type: 'thinking.delta', text: 'b' });
+    expect(s.messages[0].thinking).toBe('ab');
+  });
+
+  it('reasoning.delta appends to an open streaming message', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'reasoning.delta', text: 'scratch ' });
+    s = applyAgentEvent(s, { type: 'reasoning.delta', text: 'notes' });
+    expect(s.messages[0].reasoning).toBe('scratch notes');
+  });
+
+  it('reasoning.available replaces accumulated deltas (buffer before start)', () => {
+    let s = initialHermesState();
+    s = applyAgentEvent(s, { type: 'reasoning.delta', text: 'scratch' });
+    s = applyAgentEvent(s, { type: 'reasoning.available', text: 'final reasoning' });
+    s = startTurn(s);
+    expect(s.messages[0].reasoning).toBe('final reasoning');
+  });
+
+  it('reasoning.available attaches to the current message during streaming and does not leak', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'reasoning.delta', text: 'partial' });
+    s = applyAgentEvent(s, { type: 'reasoning.available', text: 'canonical' });
+    expect(s.messages[0].reasoning).toBe('canonical');
+    expect(s.messages[0].thinking).toBeUndefined();
+
+    // Next turn starts with a clean reasoning field.
+    s = applyAgentEvent(s, { type: 'message.complete', text: 'done', status: 'ok' });
+    s = startTurn(s);
+    expect(s.messages[1].reasoning).toBeUndefined();
+  });
+
+  it('a message with thinking is not contentless (kept on complete)', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'thinking.delta', text: 'thought' });
+    s = applyAgentEvent(s, { type: 'message.complete', text: '', status: 'ok' });
+    // The turn has thinking, so it must NOT be popped as contentless.
+    expect(s.messages).toHaveLength(1);
+    expect(s.messages[0].thinking).toBe('thought');
+    expect(s.messages[0].subagents).toEqual([]);
+  });
+
+  it('subagent.start pushes a node; message.start clears the live list', () => {
+    let s = initialHermesState();
+    s = applyAgentEvent(s, { type: 'subagent.start', id: 'sa1', parentId: 'root', depth: 1, goal: 'search', model: 'gpt-5' });
+    expect(s.subagents).toHaveLength(1);
+    expect(s.subagents[0]).toMatchObject({ id: 'sa1', parentId: 'root', depth: 1, goal: 'search', model: 'gpt-5' });
+
+    s = startTurn(s);
+    expect(s.subagents).toHaveLength(0);
+  });
+
+  it('duplicate subagent.start is ignored', () => {
+    let s = initialHermesState();
+    s = applyAgentEvent(s, { type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' });
+    s = applyAgentEvent(s, { type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' });
+    expect(s.subagents).toHaveLength(1);
+  });
+
+  it('message.complete snapshots subagents into the message', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' });
+    s = applyAgentEvent(s, { type: 'subagent.complete', id: 'sa1', status: 'ok' });
+    s = applyAgentEvent(s, { type: 'message.complete', text: 'answer', status: 'ok' });
+    const last = s.messages[s.messages.length - 1];
+    expect(last.subagents).toHaveLength(1);
+    expect(last.subagents![0].status).toBe('ok');
+  });
+
+  it('subagent.complete after message.complete updates the snapshot (async delegation)', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'reasoning.delta', text: 'delegating' });
+    s = applyAgentEvent(s, { type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' });
+    // Turn completes while the subagent is still running (status undefined).
+    s = applyAgentEvent(s, { type: 'message.complete', text: 'delegating', status: 'ok' });
+    const before = s.messages[s.messages.length - 1].subagents![0];
+    expect(before.status).toBeUndefined();
+
+    // Background subagent finishes after the turn.
+    s = applyAgentEvent(s, { type: 'subagent.complete', id: 'sa1', status: 'ok' });
+    const after = s.messages[s.messages.length - 1].subagents![0];
+    expect(after.status).toBe('ok');
+  });
+
+  it('subagent.complete ignores unknown ids', () => {
+    const before = initialHermesState();
+    const s = applyAgentEvent(before, { type: 'subagent.complete', id: 'ghost', status: 'ok' });
+    expect(s).toBe(before); // nothing to attach to — same reference
+    expect(s.subagents).toHaveLength(0);
+  });
+
+  it('error snapshots subagents into the message', () => {
+    let s = initialHermesState();
+    s = startTurn(s);
+    s = applyAgentEvent(s, { type: 'message.delta', text: 'partial' });
+    s = applyAgentEvent(s, { type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' });
+    s = applyAgentEvent(s, { type: 'subagent.complete', id: 'sa1', status: 'ok' });
+    s = applyAgentEvent(s, { type: 'error', message: 'boom' });
+    const last = s.messages[s.messages.length - 1];
+    expect(last.text).toBe('partial');
+    expect(last.subagents).toHaveLength(1);
+    expect(last.subagents![0].status).toBe('ok');
+  });
+
+  it('approval.request sets pendingApproval with a default command', () => {
+    let s = initialHermesState();
+    s = applyAgentEvent(s, { type: 'approval.request', id: 'r1', payload: {} });
+    expect(s.pendingApproval).toMatchObject({ id: 'r1', command: 'approve this tool call' });
+
+    s = applyAgentEvent(s, { type: 'approval.request', id: 'r2', command: 'cargo test', tool: 'shell', payload: {} });
+    expect(s.pendingApproval).toMatchObject({ id: 'r2', command: 'cargo test', tool: 'shell' });
+  });
+
+  it('clarify.request sets pendingClarify', () => {
+    const s = applyAgentEvent(initialHermesState(), {
+      type: 'clarify.request',
+      id: 'c1',
+      question: 'Which sessions should I delete?',
+      choices: ['set A', 'set B'],
+    });
+    expect(s.pendingClarify).toMatchObject({ id: 'c1', question: 'Which sessions should I delete?', choices: ['set A', 'set B'] });
+  });
+
+  it('session.info sets currentModel and currentProvider', () => {
+    let s = initialHermesState();
+    expect(s.currentModel).toBeUndefined();
+    s = applyAgentEvent(s, { type: 'session.info', model: 'claude-opus-5', provider: 'anthropic', cwd: '/tmp' });
+    expect(s.currentModel).toBe('claude-opus-5');
+    expect(s.currentProvider).toBe('anthropic');
+  });
+
+  it('session.title sets the title', () => {
+    let s = initialHermesState();
+    s = applyAgentEvent(s, { type: 'session.title', sessionId: 's1', title: 'Fix login test' });
+    expect(s.title).toBe('Fix login test');
+  });
+
+  it('attachments are queued, drained, removed, and cleared', () => {
+    let s = initialHermesState();
+    expect(takeAttachments(s)).toEqual([]);
+    s = addAttachment(s, 'a.png', '[User attached image: a.png]');
+    s = addAttachment(s, 'docs/b.txt', '@file:docs/b.txt');
+    expect(s.pendingAttachments).toHaveLength(2);
+    expect(takeAttachments(s)).toEqual(['[User attached image: a.png]', '@file:docs/b.txt']);
+
+    // takeAttachments does NOT clear (pure read).
+    expect(s.pendingAttachments).toHaveLength(2);
+
+    s = removeAttachment(s, 0);
+    expect(s.pendingAttachments).toHaveLength(1);
+    expect(s.pendingAttachments[0].label).toBe('docs/b.txt');
+
+    // Out-of-range removal is a no-op (same reference).
+    const before = s;
+    expect(removeAttachment(s, 5)).toBe(before);
+
+    s = clearAttachments(s);
+    expect(s.pendingAttachments).toHaveLength(0);
+  });
+
+  it('deferred gateway.ready and unknown events are still no-ops', () => {
     let s = initialHermesState();
     s = pushUser(s, 'q');
-    const noops: AgentEvent[] = [
-      { type: 'gateway.ready' },
-      { type: 'session.info', model: 'm', provider: 'p' },
-      { type: 'session.title', sessionId: 's', title: 'T' },
-      { type: 'thinking.delta', text: 'x' },
-      { type: 'reasoning.delta', text: 'y' },
-      { type: 'reasoning.available', text: 'z' },
-      { type: 'subagent.start', id: 'sa1', depth: 0, goal: 'g' },
-      { type: 'subagent.complete', id: 'sa1', status: 'ok' },
-      { type: 'approval.request', id: 'r1', payload: {} },
-      { type: 'clarify.request', id: 'c1', question: 'q', choices: [] },
-      { type: 'unknown', eventType: 'whatever', payload: {} },
-    ];
-    for (const ev of noops) {
+    for (const ev of [
+      { type: 'gateway.ready' } as AgentEvent,
+      { type: 'unknown', eventType: 'whatever', payload: {} } as AgentEvent,
+    ]) {
       const after = applyAgentEvent(s, ev);
-      expect(after).toBe(s); // same reference — a true no-op
+      expect(after).toBe(s);
     }
   });
 
@@ -366,12 +569,23 @@ describe('agent-event reducer', () => {
     expect(after).toBe(s);
   });
 
-  it('resyncMessages preserves sessionId/sessionKey/title', () => {
-    const s = { ...initialHermesState(), sessionId: 'live1', sessionKey: 'stored1', title: 'My title' };
+  it('resyncMessages preserves sessionId/sessionKey/title and clears transient state', () => {
+    const s = {
+      ...initialHermesState(),
+      sessionId: 'live1',
+      sessionKey: 'stored1',
+      title: 'My title',
+      pendingApproval: { id: 'r1', command: 'x' },
+      subagents: [{ id: 'sa1', depth: 0, goal: 'g' }],
+      pendingThinking: 'buffer',
+    };
     const out = resyncMessages(s, [{ role: 'user', text: 'hi' }]);
     expect(out.sessionId).toBe('live1');
     expect(out.sessionKey).toBe('stored1');
     expect(out.title).toBe('My title');
     expect(out.messages[0].text).toBe('hi');
+    expect(out.pendingApproval).toBeUndefined();
+    expect(out.subagents).toHaveLength(0);
+    expect(out.pendingThinking).toBe('');
   });
 });
