@@ -223,4 +223,30 @@ describe('HermesTab', () => {
     });
     expect(strong.textContent).toBe('hi');
   });
+
+  it('opens the model picker on badge click and loads providers + effort chips', async () => {
+    hermesCall.mockImplementation(async (method: string) => {
+      if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+      if (method === 'session.list') return { sessions: [] };
+      if (method === 'model.options') {
+        return {
+          current_model: 'claude-opus-5',
+          providers: [{ slug: 'anthropic', models: ['claude-opus-5', 'claude-sonnet-5'] }],
+        };
+      }
+      if (method === 'config.get') return { value: 'high' };
+      return {};
+    });
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    fireEvent.click(screen.getByRole('button', { name: /model/i }));
+
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('model.options', { explicit_only: true }));
+    expect(hermesCall).toHaveBeenCalledWith('config.get', { key: 'reasoning', session_id: 's1' });
+    expect(await screen.findByRole('button', { name: 'claude-opus-5' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'claude-sonnet-5' })).toBeInTheDocument();
+    // Effort chip row renders from EFFORT_LEVELS.
+    expect(screen.getByRole('button', { name: 'high' })).toBeInTheDocument();
+  });
 });

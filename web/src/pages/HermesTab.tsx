@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
 import { Markdown } from '../components/Markdown';
+import { HermesModelPicker } from '../components/HermesModelPicker';
 import type { Message, ToolCard } from '../hermes/types';
 
 const ROLE_ICON: Record<Message['role'], string> = { user: '🧑', assistant: '🤖', steer: '🎯' };
@@ -38,8 +39,9 @@ function MessageView({ msg }: { msg: Message }) {
 }
 
 export function HermesTab() {
-  const { state, send, stop, undo, sessions, newSession, resume } = useHermes();
+  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort } = useHermes();
   const [text, setText] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
 
   // The current session is the row whose durable key (or live id) matches
   // `state.sessionKey` — the id `session.list` keys entries by.
@@ -112,7 +114,28 @@ export function HermesTab() {
           {state.messages.map((m) => <MessageView key={m.id} msg={m} />)}
         </div>
         {state.status && <div style={{ color: 'var(--muted)', fontSize: 11, padding: '4px 2px' }}>{state.status}</div>}
+        {showPicker && (
+          <div style={{ position: 'relative', marginBottom: 6 }}>
+            <HermesModelPicker
+              sessionId={state.sessionId}
+              currentModel={state.currentModel}
+              currentProvider={state.currentProvider}
+              currentEffort={state.currentEffort}
+              setModel={setModel}
+              setEffort={setEffort}
+              onClose={() => setShowPicker(false)}
+            />
+          </div>
+        )}
         <div className="send-input">
+          <button
+            className="btn"
+            aria-label="model"
+            onClick={() => setShowPicker((v) => !v)}
+            style={{ flexShrink: 0 }}
+          >
+            {state.currentModel ?? 'model'}{state.currentEffort ? ` · ${state.currentEffort}` : ''}
+          </button>
           <input
             value={text}
             placeholder="Ask Hermes…"
