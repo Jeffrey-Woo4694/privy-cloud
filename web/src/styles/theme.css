@@ -267,3 +267,35 @@ button { font: inherit; cursor: pointer; }
   white-space: pre;
 }
 .codeviewer pre.codeviewer-code { flex: 1; min-width: 0; margin: 0; padding: 10px 12px; overflow: visible; white-space: pre; background: none; }
+
+/* ---- Mobile shell (chat-app style, ChatGPT-iOS look) ---- */
+/* The drawer width and the distance the content slides are the same CSS var, so
+   they always line up. */
+.mobile-shell { position: relative; height: 100%; overflow: hidden; --drawer-w: min(85vw, 300px); }
+.mobile-content { height: 100%; display: flex; flex-direction: column; transition: transform .25s ease; }
+.mobile-content.open { transform: translateX(var(--drawer-w)); }
+.mobile-topbar {
+  display: flex; align-items: center; gap: 4px; padding: 6px 8px; flex-shrink: 0;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.mobile-menu { flex-shrink: 0; font-size: 18px; padding: 4px 9px; }
+.mobile-title { font-size: 15px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobile-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); opacity: 0; pointer-events: none; transition: opacity .25s ease; z-index: 20; }
+.mobile-overlay.open { opacity: 1; pointer-events: auto; }
+.mobile-drawer {
+  position: absolute; top: 0; bottom: 0; left: 0; width: var(--drawer-w);
+  background: var(--panel); border-right: 1px solid var(--border); transform: translateX(-100%);
+  transition: transform .25s ease; z-index: 30; display: flex; flex-direction: column;
+  padding: 10px 8px; gap: 2px; overflow-y: auto;
+}
+.mobile-drawer.open { transform: translateX(0); }
+.mobile-drawer-title { font-size: 15px; font-weight: 700; color: var(--text); padding: 6px 10px 12px; }
+.mobile-drawer-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px; border: none; background: transparent; border-radius: 8px; color: var(--text); font-size: 15px; cursor: pointer; }
+.mobile-drawer-item:hover { background: var(--chipbg); }
+.mobile-drawer-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.mobile-drawer-icon { font-size: 18px; }
+.mobile-drawer-divider { border-top: 1px solid var(--border); margin: 8px 4px; }
+
+/* Mobile sub-header inside a tab (chat ← → browse files / sessions toggle). */
+.mobile-subheader { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.mobile-subtitle { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }

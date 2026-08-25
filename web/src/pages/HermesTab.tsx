@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
+import { useMediaQuery } from '../useMediaQuery';
 import { api } from '../api';
 import { Markdown } from '../components/Markdown';
 import { HermesModelPicker } from '../components/HermesModelPicker';
@@ -75,6 +76,9 @@ export function HermesTab() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [slashItems, setSlashItems] = useState<{ text: string }[]>([]);
+  // On mobile hide the session sidebar so the chat fills the small screen
+  // (session switching remains on the desktop layout for now).
+  const isMobile = useMediaQuery('(max-width: 820px)');
 
   // Slash-command autocomplete: while the composer starts with `/`, debounce a
   // `complete.slash` call and render suggestions. The `send` bridge already
@@ -156,6 +160,7 @@ export function HermesTab() {
       {state.pendingClarify && (
         <HermesClarifyDialog prompt={state.pendingClarify} onRespond={respondClarify} />
       )}
+      {!isMobile && (
       <aside
         style={{
           width: 220,
@@ -194,6 +199,7 @@ export function HermesTab() {
           );
         })}
       </aside>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="panel-title">Hermes Agent</div>
