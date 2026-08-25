@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useHermes } from '../hermes/useHermes';
 import { api } from '../api';
 import { Markdown } from '../components/Markdown';
@@ -62,13 +62,14 @@ function MessageView({ msg }: { msg: Message }) {
 }
 
 export function HermesTab() {
-  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify, archive, rename, remove, mostRecent } = useHermes();
+  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify, attachImage, attachFile, removeAttachment, archive, rename, remove, mostRecent } = useHermes();
   const [text, setText] = useState('');
   const [showPicker, setShowPicker] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [slashItems, setSlashItems] = useState<{ text: string }[]>([]);
 
   // Slash-command autocomplete: while the composer starts with `/`, debounce a
@@ -125,6 +126,26 @@ export function HermesTab() {
     const draft = renameDraft.trim();
     if (draft) await rename(draft);
     setRenamingId(null);
+  };
+
+  const handleAttach = async (file: File) => {
+    if (!file) return;
+    try {
+      // The browser gives a File with no server-side path; place it in the
+      // shared library (reusing the Privy Cloud upload endpoint), then attach
+      // by the resulting gateway-addressable path. The gateway resolves `path`
+      // against its session `cwd` (the project root), so `Privy Cloud/<rel>`
+      // is readable.
+      const entries = await api.sendFiles([file]);
+      const entry = entries[0];
+      if (!entry?.path) return;
+      const gatewayPath = `Privy Cloud/${entry.path}`;
+      if (file.type.startsWith('image/')) await attachImage(gatewayPath);
+      else await attachFile(gatewayPath, file.name);
+    } catch {
+      // Upload or attach failed — the chip is not added.
+    }
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   return (
@@ -255,7 +276,27 @@ export function HermesTab() {
             </div>
           </div>
         )}
+        {state.pendingAttachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+            {state.pendingAttachments.map((a, i) => (
+              <span
+                key={i}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--inputbg)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 6px', fontSize: 11, color: 'var(--text)' }}
+              >
+                {a.label}
+                <button className="btn" aria-label={`remove ${a.label}`} onClick={() => removeAttachment(i)} style={{ padding: 0, fontSize: 10, lineHeight: 1 }}>✕</button>
+              </span>
+            ))}
+          </div>
+        )}
         <div className="send-input">
+          <button className="btn" aria-label="attach" onClick={() => fileRef.current?.click()} style={{ flexShrink: 0 }}>📎</button>
+          <input
+            ref={fileRef}
+            type="file"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleAttach(f); }}
+          />
           <button
             className="btn"
             aria-label="model"

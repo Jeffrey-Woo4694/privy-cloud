@@ -4,12 +4,13 @@ import { HermesTab } from '../pages/HermesTab';
 
 // Mock the API + WS modules the hook depends on. `connect` captures the
 // onHermesEvent callback so tests can drive WS events through the reducer.
-const { hermesCall, connect } = vi.hoisted(() => ({
+const { hermesCall, connect, sendFiles } = vi.hoisted(() => ({
   hermesCall: vi.fn(),
   connect: vi.fn(),
+  sendFiles: vi.fn(),
 }));
 
-vi.mock('../api', () => ({ api: { hermesCall } }));
+vi.mock('../api', () => ({ api: { hermesCall, sendFiles } }));
 vi.mock('../ws', () => ({ connect }));
 
 type WsEvent = { event: unknown; sessionId: string | null };
@@ -23,6 +24,8 @@ beforeEach(() => {
   onHermesEvent = undefined;
   hermesCall.mockReset();
   connect.mockReset();
+  sendFiles.mockReset();
+  sendFiles.mockResolvedValue([{ path: 'Images/photo.png' }]);
   connect.mockImplementation((cb: { onHermesEvent: (e: WsEvent) => void }) => {
     onHermesEvent = cb.onHermesEvent;
     return () => {};
@@ -364,5 +367,22 @@ describe('HermesTab', () => {
 
     await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.close', { session_id: 's1' }));
     expect(hermesCall).toHaveBeenCalledWith('session.delete', { session_id: 'k1' });
+  });
+
+  it('attaches a file: uploads to the library then attaches by the gateway path', async () => {
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['x'], 'photo.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(sendFiles).toHaveBeenCalled());
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('image.attach', { session_id: 's1', path: 'Privy Cloud/Images/photo.png' }));
+
+    // Chip appears; removing it drops the chip.
+    expect(await screen.findByText('photo.png')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /remove photo.png/i }));
+    expect(screen.queryByText('photo.png')).not.toBeInTheDocument();
   });
 });

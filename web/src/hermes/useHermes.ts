@@ -20,6 +20,7 @@ import {
   pushAssistant,
   pushSteer,
   pushUser,
+  removeAttachment as removeAttachmentReducer,
   resyncMessages,
   takeAttachments,
   undoLastTurn,
@@ -107,6 +108,7 @@ export function useHermes(): {
   respondClarify(answer: string): void;
   attachImage(path: string): Promise<void>;
   attachFile(path: string, name: string): Promise<void>;
+  removeAttachment(index: number): void;
   archive(): Promise<string>;
   rename(title: string): Promise<void>;
   remove(): Promise<void>;
@@ -345,6 +347,10 @@ export function useHermes(): {
     }
   }, []);
 
+  const removeAttachment = useCallback((index: number) => {
+    setState((s) => removeAttachmentReducer(s, index));
+  }, []);
+
   const archive = useCallback(async () => {
     const { sessionId, title } = stateRef.current;
     if (!sessionId) return '';
@@ -386,5 +392,5 @@ export function useHermes(): {
     if (result?.session_id) resume(result.session_id);
   }, [resume]);
 
-  return { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify, attachImage, attachFile, archive, rename, remove, mostRecent };
+  return { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify, attachImage, attachFile, removeAttachment, archive, rename, remove, mostRecent };
 }
