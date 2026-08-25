@@ -30,6 +30,20 @@ function ToolCardView({ tool }: { tool: ToolCard }) {
   );
 }
 
+/// Download `content` as `<title>-<YYYY-MM-DD>.md`. Guarded so it no-ops where
+/// `URL.createObjectURL` is unavailable (jsdom), keeping the Archive action
+/// testable by asserting the `session.history` RPC instead.
+function downloadArchive(title: string, content: string) {
+  if (typeof URL.createObjectURL !== 'function') return;
+  const blob = new Blob([content], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title || 'hermes-session'}-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function MessageView({ msg }: { msg: Message }) {
   return (
     <div className="chat-entry">
@@ -48,9 +62,13 @@ function MessageView({ msg }: { msg: Message }) {
 }
 
 export function HermesTab() {
-  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify } = useHermes();
+  const { state, send, stop, undo, sessions, newSession, resume, setModel, setEffort, respondApproval, respondClarify, archive, rename, remove, mostRecent } = useHermes();
   const [text, setText] = useState('');
   const [showPicker, setShowPicker] = useState(false);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [slashItems, setSlashItems] = useState<{ text: string }[]>([]);
 
   // Slash-command autocomplete: while the composer starts with `/`, debounce a
@@ -97,6 +115,18 @@ export function HermesTab() {
     submitText();
   };
 
+  const onArchive = async () => {
+    const md = await archive();
+    downloadArchive(state.title, md);
+  };
+
+  const onRename = async () => {
+    if (!renamingId) return;
+    const draft = renameDraft.trim();
+    if (draft) await rename(draft);
+    setRenamingId(null);
+  };
+
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       {state.pendingApproval && (
@@ -118,6 +148,7 @@ export function HermesTab() {
         }}
       >
         <button className="btn primary" onClick={newSession}>＋ New session</button>
+        <button className="btn" onClick={() => { void mostRecent(); }}>↻ Reopen last</button>
         {sessions.length === 0 && (
           <div style={{ color: 'var(--muted)', fontSize: 12, padding: '4px 2px' }}>No sessions yet.</div>
         )}
@@ -143,7 +174,51 @@ export function HermesTab() {
         })}
       </aside>
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-        <div className="panel-title">Hermes Agent</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="panel-title">Hermes Agent</div>
+          {state.sessionId && (
+            <div style={{ position: 'relative' }}>
+              <button
+                className="btn"
+                aria-label="session actions"
+                onClick={() => setMenuOpenId(menuOpenId ? null : '__active__')}
+              >
+                ⋯
+              </button>
+              {menuOpenId === '__active__' && !renamingId && !deletingId && (
+                <div
+                  className="session-action-menu"
+                  style={{ position: 'absolute', right: 0, top: '100%', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, display: 'flex', flexDirection: 'column', minWidth: 140, zIndex: 10 }}
+                >
+                  <button className="btn" onClick={() => { setMenuOpenId(null); void onArchive(); }}>Archive</button>
+                  <button className="btn" onClick={() => { setRenamingId('__active__'); setRenameDraft(state.title); setMenuOpenId(null); }}>Rename</button>
+                  <button className="btn" onClick={() => { setDeletingId('__active__'); setMenuOpenId(null); }}>Delete</button>
+                </div>
+              )}
+              {renamingId === '__active__' && (
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                  <input
+                    value={renameDraft}
+                    onChange={(e) => setRenameDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') void onRename(); }}
+                    style={{ flex: 1, padding: 6, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--inputbg)', color: 'var(--text)' }}
+                  />
+                  <button className="btn" onClick={() => void onRename()}>Save</button>
+                  <button className="btn" onClick={() => setRenamingId(null)}>Cancel</button>
+                </div>
+              )}
+              {deletingId === '__active__' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4, alignItems: 'flex-end' }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>Delete this session?</span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn" onClick={() => { setDeletingId(null); void remove(); }}>Confirm</button>
+                    <button className="btn" onClick={() => setDeletingId(null)}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {state.messages.length === 0 && (
             <div className="empty-state">Ask your local Hermes agent anything.</div>

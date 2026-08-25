@@ -313,4 +313,56 @@ describe('HermesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: '/help' }));
     expect(input).toHaveValue('/help');
   });
+
+  it('archives the active session via the ⋯ menu', async () => {
+    hermesCall.mockImplementation(async (method: string) => {
+      if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+      if (method === 'session.list') return { sessions: [] };
+      if (method === 'session.history') return { messages: [{ role: 'user', text: 'hi' }, { role: 'assistant', text: 'yo' }] };
+      return {};
+    });
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    fireEvent.click(screen.getByRole('button', { name: /session actions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.history', { session_id: 's1' }));
+  });
+
+  it('renames the active session via the ⋯ menu', async () => {
+    hermesCall.mockImplementation(async (method: string) => {
+      if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+      if (method === 'session.list') return { sessions: [] };
+      return {};
+    });
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    fireEvent.click(screen.getByRole('button', { name: /session actions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /rename/i }));
+
+    const input = await screen.findByDisplayValue('New session');
+    fireEvent.change(input, { target: { value: 'Renamed chat' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.title', { session_id: 's1', title: 'Renamed chat' }));
+  });
+
+  it('deletes the active session via the ⋯ menu (close then delete)', async () => {
+    hermesCall.mockImplementation(async (method: string) => {
+      if (method === 'session.create') return { session_id: 's1', stored_session_id: 'k1' };
+      if (method === 'session.list') return { sessions: [] };
+      return {};
+    });
+    render(<HermesTab />);
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.create', {}));
+
+    fireEvent.click(screen.getByRole('button', { name: /session actions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    await waitFor(() => expect(hermesCall).toHaveBeenCalledWith('session.close', { session_id: 's1' }));
+    expect(hermesCall).toHaveBeenCalledWith('session.delete', { session_id: 'k1' });
+  });
 });
