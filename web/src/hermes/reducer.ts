@@ -48,6 +48,10 @@ export function initialHermesState(): HermesState {
     streaming: false,
     status: '',
     nextMessageId: 1,
+    pendingAttachments: [],
+    subagents: [],
+    pendingThinking: '',
+    pendingReasoning: '',
   };
 }
 
