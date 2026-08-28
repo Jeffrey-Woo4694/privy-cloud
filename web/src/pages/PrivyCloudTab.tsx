@@ -9,6 +9,7 @@ import { SharingSidebar } from '../components/SharingSidebar';
 import { PathBar } from '../components/PathBar';
 import { SharingGrid } from '../components/SharingGrid';
 import { ListView } from '../components/ListView';
+import { GridIcon, ListIcon } from '../components/icons';
 import { sortItems, nextSort, type Sort, type SortKey } from '../sortItems';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
@@ -335,7 +336,12 @@ export function PrivyCloudTab() {
               <button className="btn" onClick={() => { setCreating(null); setNewName(''); }}>Cancel</button>
             </span>
           )}
-          <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))} title="Toggle grid/list view">{viewMode === 'grid' ? '☰ List' : '▦ Grid'}</button>
+          <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
+            title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+            aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            {viewMode === 'grid' ? <GridIcon /> : <ListIcon />}
+          </button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
           onDragOver={gridDragOver} onDragLeave={gridDragLeave} onDrop={gridDrop}>
