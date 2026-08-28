@@ -21,7 +21,10 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listItems: (kind?: Kind): Promise<FileItem[]> => req(`/api/items${kind ? `?kind=${kind}` : ''}`),
+  listItems: (kind?: Kind, hidden?: boolean): Promise<FileItem[]> => {
+    const qs = [kind ? `kind=${kind}` : '', hidden ? 'hidden=1' : ''].filter(Boolean).join('&');
+    return req(`/api/items${qs ? `?${qs}` : ''}`);
+  },
   getFileText: (path: string): Promise<string> => fetch(`${API_BASE}/api/file?path=${encodeURIComponent(path)}`, { headers: { authorization: `Bearer ${getToken() ?? ''}` } }).then((r) => r.text()),
   saveFileText: (path: string, content: string) =>
     req(`/api/file?path=${encodeURIComponent(path)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }),

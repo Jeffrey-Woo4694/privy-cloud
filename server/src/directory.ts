@@ -29,12 +29,14 @@ export function resolveSafe(base: string, rel: string): string | null {
   return norm;
 }
 
-export async function listItems(root: string): Promise<FileItem[]> {
+export async function listItems(root: string, opts: { includeHidden?: boolean } = {}): Promise<FileItem[]> {
   const base = join(root, 'Privy Cloud');
+  const includeHidden = !!opts.includeHidden;
   const out: FileItem[] = [];
   const walk = (dir: string): void => {
     for (const name of readdirSync(dir)) {
-      if (name.startsWith('.')) continue;
+      if (name === '.privy') continue; // backend-internal, never shown/listed
+      if (!includeHidden && name.startsWith('.')) continue;
       const abs = join(dir, name);
       const st = statSync(abs);
       const rel = relative(base, abs);

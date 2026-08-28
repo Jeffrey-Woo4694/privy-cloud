@@ -53,7 +53,7 @@ export function SharingGrid({ items, onSelect, onOpen, selected, singleClickOpen
   const { interactionFor, cls } = useItemInteraction({ onSelect, onOpen, onMoveTo, selected, singleClickOpens });
   if (items.length === 0) return <div className="empty-state">{emptyMessage ?? 'Nothing here yet — send something from the chat.'}</div>;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(calc(140px * var(--icon-scale, 1)), 1fr))', gap: 10 }}>
       {items.map((item) => {
         const isRenaming = renaming === item.path;
         const body = (

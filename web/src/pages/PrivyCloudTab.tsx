@@ -9,7 +9,8 @@ import { SharingSidebar } from '../components/SharingSidebar';
 import { PathBar } from '../components/PathBar';
 import { SharingGrid } from '../components/SharingGrid';
 import { ListView } from '../components/ListView';
-import { GridIcon, ListIcon } from '../components/icons';
+import { ViewOptions, type DisplaySize } from '../components/ViewOptions';
+import { GridIcon, ListIcon, DotsIcon } from '../components/icons';
 import { sortItems, nextSort, type Sort, type SortKey } from '../sortItems';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
@@ -54,6 +55,14 @@ export function PrivyCloudTab() {
   });
   useEffect(() => { localStorage.setItem('privy-view', viewMode); }, [viewMode]);
   useEffect(() => { localStorage.setItem('privy-sort', JSON.stringify(sort)); }, [sort]);
+  // View options: icon size, show hidden files, and the popover open state.
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const [displaySize, setDisplaySize] = useState<DisplaySize>(() => (localStorage.getItem('privy-display-size') as DisplaySize) || 'medium');
+  const [showHidden, setShowHidden] = useState(() => localStorage.getItem('privy-show-hidden') === '1');
+  useEffect(() => { localStorage.setItem('privy-display-size', displaySize); }, [displaySize]);
+  useEffect(() => { localStorage.setItem('privy-show-hidden', showHidden ? '1' : '0'); }, [showHidden]);
+  const showHiddenRef = useRef(showHidden);
+  useEffect(() => { showHiddenRef.current = showHidden; }, [showHidden]);
 
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
@@ -66,7 +75,7 @@ export function PrivyCloudTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const [its, entries] = await Promise.all([api.listItems(), api.listChat()]);
+      const [its, entries] = await Promise.all([api.listItems(undefined, showHiddenRef.current), api.listChat()]);
       setItems(its);
       setChat(chronological(entries));
     } catch (e) { setError((e as Error).message); }
@@ -77,7 +86,7 @@ export function PrivyCloudTab() {
   useEffect(() => {
     const disconnect = connect({
       onItemsChanged: () => {
-        void api.listItems().then(setItems);
+        void api.listItems(undefined, showHiddenRef.current).then(setItems);
         void api.listChat().then((e) => setChat(chronological(e)));
         void refreshTrash();
       },
@@ -90,6 +99,15 @@ export function PrivyCloudTab() {
   const viewItems = useMemo(() => itemsForLocation(loc, items), [loc, items]);
   const sortedItems = useMemo(() => sortItems(viewItems, sort), [viewItems, sort]);
   const onSort = useCallback((key: SortKey) => setSort((s) => nextSort(s, key)), []);
+  const onSortPreset = useCallback((s: Sort) => setSort(s), []);
+  const ICON_SCALES: Record<DisplaySize, number> = { small: 0.78, medium: 1, large: 1.3 };
+  const iconScale = ICON_SCALES[displaySize] ?? 1;
+  const SIZE_ORDER: DisplaySize[] = ['small', 'medium', 'large'];
+  const onDisplaySize = (delta: -1 | 1) => {
+    const i = SIZE_ORDER.indexOf(displaySize);
+    setDisplaySize(SIZE_ORDER[Math.min(Math.max(i + delta, 0), SIZE_ORDER.length - 1)]);
+  };
+  const onShowHidden = (v: boolean) => { showHiddenRef.current = v; setShowHidden(v); void refresh(); };
 
   // Drop a file/folder onto the sharing grid → it lands in the folder currently
   // being browsed ('home' → Privy Cloud root). Recent/Trash are virtual views — no
@@ -115,7 +133,7 @@ export function PrivyCloudTab() {
     setSelected(found);
   };
   const onSaved = async () => {
-    await Promise.all([api.listItems().then(setItems), api.listChat().then((e) => setChat(chronological(e)))]);
+    await Promise.all([api.listItems(undefined, showHiddenRef.current).then(setItems), api.listChat().then((e) => setChat(chronological(e)))]);
   };
 
   // Navigate to a location (sidebar, breadcrumb, or folder tile); refresh trash when entering it.
@@ -336,14 +354,22 @@ export function PrivyCloudTab() {
               <button className="btn" onClick={() => { setCreating(null); setNewName(''); }}>Cancel</button>
             </span>
           )}
-          <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
-            title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-            aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-            {viewMode === 'grid' ? <GridIcon /> : <ListIcon />}
-          </button>
+          <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button className="btn" onClick={() => setViewOptionsOpen((o) => !o)} aria-label="View options" aria-expanded={viewOptionsOpen} title="View options"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><DotsIcon /></button>
+              <ViewOptions open={viewOptionsOpen} onClose={() => setViewOptionsOpen(false)} sort={sort} onSort={onSortPreset}
+                displaySize={displaySize} onDisplaySize={onDisplaySize} showHidden={showHidden} onShowHidden={onShowHidden} />
+            </div>
+            <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
+              title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+              aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {viewMode === 'grid' ? <GridIcon /> : <ListIcon />}
+            </button>
+          </div>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
+        <div style={{ flex: 1, overflowY: 'auto', position: 'relative', '--icon-scale': iconScale } as React.CSSProperties} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
           onDragOver={gridDragOver} onDragLeave={gridDragLeave} onDrop={gridDrop}>
           {gridDragging && <div className="drop-overlay">Drop to upload into this folder</div>}
           {loc.type === 'trash' ? (

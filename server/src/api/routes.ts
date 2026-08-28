@@ -86,8 +86,8 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
   });
 
   app.get('/api/items', async (req) => {
-    const kind = (req.query as { kind?: string }).kind;
-    const all = await listItems(ctx.getRoot());
+    const { kind, hidden } = (req.query as { kind?: string; hidden?: string });
+    const all = await listItems(ctx.getRoot(), { includeHidden: hidden === '1' || hidden === 'true' });
     return kind ? all.filter((i) => i.kind === kind) : all;
   });
 

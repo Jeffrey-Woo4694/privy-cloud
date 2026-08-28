@@ -12,6 +12,16 @@ export function GridIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+export function DotsIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <circle cx="3" cy="8" r="1.6" />
+      <circle cx="8" cy="8" r="1.6" />
+      <circle cx="13" cy="8" r="1.6" />
+    </svg>
+  );
+}
+
 export function ListIcon({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">

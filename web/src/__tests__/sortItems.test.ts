@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { sortItems, nextSort } from '../sortItems';
+import { sortItems, nextSort, presetIdFor } from '../sortItems';
 
-const item = (name: string, size = 0, modifiedAt = '2026-01-01') => ({ name, size, modifiedAt });
+const item = (name: string, size = 0, modifiedAt = '2026-01-01', kind?: string) => ({ name, size, modifiedAt, kind });
 
 describe('sortItems', () => {
   it('sorts by name ascending with natural numeric ordering', () => {
@@ -40,5 +40,21 @@ describe('sortItems', () => {
     expect(nextSort({ key: 'name', dir: 'asc' }, 'name')).toEqual({ key: 'name', dir: 'desc' });
     expect(nextSort({ key: 'name', dir: 'desc' }, 'name')).toEqual({ key: 'name', dir: 'asc' });
     expect(nextSort({ key: 'name', dir: 'asc' }, 'size')).toEqual({ key: 'size', dir: 'asc' });
+  });
+
+  it('sorts by type (kind label)', () => {
+    const img = item('z.png', 0, '2026-01-01', 'image');
+    const doc = item('a.docx', 0, '2026-01-01', 'document');
+    const folder = item('m', 0, '2026-01-01', 'folder');
+    // Ascending by kind label: Documents, Folders, Images.
+    expect(sortItems([img, doc, folder], { key: 'type', dir: 'asc' }).map((i) => i.name)).toEqual(['a.docx', 'm', 'z.png']);
+  });
+
+  it('presetIdFor maps a sort to its named preset', () => {
+    expect(presetIdFor({ key: 'name', dir: 'asc' })).toBe('az');
+    expect(presetIdFor({ key: 'name', dir: 'desc' })).toBe('za');
+    expect(presetIdFor({ key: 'modified', dir: 'desc' })).toBe('last-modified');
+    expect(presetIdFor({ key: 'type', dir: 'asc' })).toBe('type');
+    expect(presetIdFor({ key: 'size', dir: 'desc' })).toBeNull(); // no preset for descending size
   });
 });
