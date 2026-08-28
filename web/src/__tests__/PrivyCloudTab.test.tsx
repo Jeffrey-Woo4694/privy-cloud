@@ -64,7 +64,7 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('navigates into a folder when its tile is clicked', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     expect(screen.getByTitle('Open sub')).toBeInTheDocument();
     expect(screen.queryByText('deep.txt')).toBeNull();
@@ -73,7 +73,7 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('navigates back to the root via the back button', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
     fireEvent.click(screen.getByLabelText('back'));
     expect(screen.getByTitle('Open Images')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
@@ -138,16 +138,16 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('opens a file in the viewer and keeps the chat visible', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
-    fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
+    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(screen.getByRole('button', { name: /a\.png/ }));
     expect(screen.getByText('← Back to sharing')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
   });
 
   it('returns to the grid from the viewer, keeping the chat', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.click(await screen.findByTitle('Open Images'));
-    fireEvent.click(screen.getByRole('button', { name: /a\.png/ }));
+    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(screen.getByRole('button', { name: /a\.png/ }));
     fireEvent.click(screen.getByText('← Back to sharing'));
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();

@@ -90,6 +90,10 @@ export const api = {
     req('/api/items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentPath, name, kind: 'file', content }) }),
   rename: (path: string, newName: string): Promise<{ path: string }> =>
     req('/api/rename', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, newName }) }),
+  copy: (paths: string[], target: string): Promise<{ created: string[] }> =>
+    req('/api/copy', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paths, target }) }),
+  move: (paths: string[], target: string): Promise<{ created: string[] }> =>
+    req('/api/move', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paths, target }) }),
   officeSession: (path: string, force = false): Promise<{ enabled: boolean; token?: string; key?: string; fileUrl?: string; callbackUrl?: string; engineUrl?: string; fileType?: string; title?: string; expiresAt?: string }> =>
     req(`/api/office/session?path=${encodeURIComponent(path)}${force ? '&force=1' : ''}`),
   endOfficeSession: (token: string): Promise<{ ok: boolean }> =>

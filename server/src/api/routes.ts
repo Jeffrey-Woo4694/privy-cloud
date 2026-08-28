@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
 import { listItems, resolveSafe, initRootStructure, privyBase, proxyPathFor } from '../directory.js';
-import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, renameItem, uploadInto } from '../storage.js';
+import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, renameItem, uploadInto, copyInto, moveItems } from '../storage.js';
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
@@ -323,6 +323,37 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
       throw err;
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  // Copy files/folders into a target directory (Ctrl+C/Ctrl+V on the grid). `paths`
+  // are vault rel paths; `target` is the destination folder rel ('' = Privy Cloud root).
+  app.post('/api/copy', async (req, reply) => {
+    const { paths, target = '' } = (req.body ?? {}) as { paths?: string[]; target?: string };
+    if (!Array.isArray(paths) || paths.length === 0) return reply.code(400).send({ error: 'paths required' });
+    try {
+      const created = await copyInto(ctx.getRoot(), target, paths);
+      ctx.emit({ type: 'items:changed', path: target, change: 'created' });
+      return { created };
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message === 'unsafe target' || message === 'unsafe copy path' || message === 'cannot copy into itself') return reply.code(400).send({ error: message });
+      throw err;
+    }
+  });
+
+  // Move files/folders into a target directory (Ctrl+X + Ctrl+V, or drag-to-move).
+  app.post('/api/move', async (req, reply) => {
+    const { paths, target = '' } = (req.body ?? {}) as { paths?: string[]; target?: string };
+    if (!Array.isArray(paths) || paths.length === 0) return reply.code(400).send({ error: 'paths required' });
+    try {
+      const created = await moveItems(ctx.getRoot(), target, paths);
+      ctx.emit({ type: 'items:changed', path: target, change: 'modified' });
+      return { created };
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message === 'unsafe target' || message === 'unsafe move path' || message === 'cannot move into itself') return reply.code(400).send({ error: message });
+      throw err;
     }
   });
 

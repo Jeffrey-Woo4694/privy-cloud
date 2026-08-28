@@ -1,4 +1,4 @@
-import { useRef, type MouseEvent as ReactMouseEvent } from 'react';
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { KINDS, type FileItem, type Kind } from '@privy/shared';
 import { api } from '../api';
 
@@ -40,13 +40,17 @@ function RenameInput({ item, onCommit, onCancel }: { item: FileItem; onCommit(na
   );
 }
 
-export function SharingGrid({ items, onSelect, emptyMessage, onTileContextMenu, renaming, onCommitRename, onCancelRename }: {
-  items: FileItem[]; onSelect: (item: FileItem) => void; emptyMessage?: string;
+export function SharingGrid({ items, onSelect, onOpen, selected, singleClickOpens, onMoveTo, emptyMessage, onTileContextMenu, renaming, onCommitRename, onCancelRename }: {
+  items: FileItem[]; onSelect: (item: FileItem, shiftKey: boolean) => void; onOpen?: (item: FileItem) => void;
+  selected?: Set<string>; singleClickOpens?: boolean;
+  onMoveTo?: (from: string, toFolder: string) => void; emptyMessage?: string;
   onTileContextMenu?: (e: ReactMouseEvent<HTMLElement>, item: FileItem) => void;
   renaming?: string | null;
   onCommitRename?: (item: FileItem, newName: string) => void;
   onCancelRename?: () => void;
 }) {
+  // The tile being dragged (so a folder tile can offer to accept a move drop).
+  const [dragPath, setDragPath] = useState<string | null>(null);
   if (items.length === 0) return <div className="empty-state">{emptyMessage ?? 'Nothing here yet — send something from the chat.'}</div>;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
@@ -70,8 +74,14 @@ export function SharingGrid({ items, onSelect, emptyMessage, onTileContextMenu, 
           return <div key={item.path} className="tile">{body}</div>;
         }
         return (
-          <button key={item.path} className="tile" title={item.isDir ? `Open ${item.name}` : item.name}
-            onClick={() => onSelect(item)}
+          <button key={item.path} className={`tile${selected?.has(item.path) ? ' selected' : ''}${item.isDir && dragPath && dragPath !== item.path && onMoveTo ? ' drop-target' : ''}`}
+            title={item.isDir ? `Open ${item.name}` : item.name} draggable
+            onClick={(e) => (singleClickOpens ? onOpen?.(item) : onSelect(item, e.shiftKey))}
+            onDoubleClick={() => onOpen?.(item)}
+            onDragStart={(e) => { setDragPath(item.path); e.dataTransfer.setData('text/plain', item.path); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragEnd={() => setDragPath(null)}
+            onDragOver={(e) => { if (item.isDir && dragPath && dragPath !== item.path) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+            onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('text/plain') || dragPath; setDragPath(null); if (from && from !== item.path) onMoveTo?.(from, item.path); }}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTileContextMenu?.(e, item); }}>
             {body}
           </button>

@@ -28,6 +28,8 @@ button { font: inherit; cursor: pointer; }
 .kind-chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--chipbg); color: var(--muted); border: 1px solid transparent; }
 .kind-chip.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .tile { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: left; }
+.tile.selected { border-color: var(--accent); background: var(--chipbg); box-shadow: 0 0 0 1px var(--accent); }
+.tile.drop-target { border-style: dashed; border-color: var(--accent); }
 .tile:hover { border-color: var(--accent); }
 .tile-icon { font-size: 22px; }
 .tile-name { font-size: 13px; margin-top: 6px; word-break: break-word; line-height: 1.2; }

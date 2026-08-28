@@ -1,4 +1,4 @@
-import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync, statSync, createReadStream } from 'node:fs';
+import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync, statSync, createReadStream, copyFileSync, cpSync } from 'node:fs';
 import { rename, copyFile, rm } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -133,6 +133,81 @@ export async function uploadInto(
     const finalRel = uniqueRel(root, dirRel === '.' ? '' : dirRel, basename(rel));
     await writeAbs(root, finalRel, createReadStream(item.tmpPath));
     created.push(finalRel);
+  }
+  return created;
+}
+
+/**
+ * Copy files/folders (by their vault rel) into a target directory. Files are copied
+ * with a collision-free name; folders are copied recursively (the whole tree). Guards
+ * against escaping the vault, the internal `.privy` area, and copying a folder into
+ * itself or a descendant (which would recurse forever). Returns the created top-level
+ * rel paths.
+ */
+export async function copyInto(root: string, target: string, srcRels: string[]): Promise<string[]> {
+  const base = privyBase(root);
+  const internal = join(base, '.privy');
+  if (badSegment(target)) throw new Error('unsafe target');
+  const targetBase = target === '' ? base : resolveSafe(base, target);
+  if (!targetBase || targetBase === internal || targetBase.startsWith(internal + '/')
+    || !existsSync(targetBase) || !statSync(targetBase).isDirectory()) {
+    throw new Error('unsafe target');
+  }
+  const created: string[] = [];
+  for (const srcRel of srcRels) {
+    if (badSegment(srcRel)) throw new Error('unsafe copy path');
+    const srcAbs = resolveSafe(base, srcRel);
+    if (!srcAbs || srcAbs === internal || srcAbs.startsWith(internal + '/')) throw new Error('unsafe copy path');
+    if (!existsSync(srcAbs)) throw new Error('not found');
+    const st = statSync(srcAbs);
+    const destRel = uniqueRel(root, target, basename(srcRel));
+    const destAbs = resolveSafe(base, destRel)!;
+    // A folder must not be copied into itself or its descendant (would recurse forever).
+    if (st.isDirectory() && (destAbs === srcAbs || destAbs.startsWith(srcAbs + '/'))) throw new Error('cannot copy into itself');
+    if (st.isDirectory()) cpSync(srcAbs, destAbs, { recursive: true });
+    else copyFileSync(srcAbs, destAbs);
+    created.push(destRel);
+  }
+  return created;
+}
+
+/**
+ * Move files/folders (by their vault rel) into a target directory (cut + paste /
+ * drag-to-move). The item is relocated with a collision-free name; a folder moves as
+ * a whole (children come with it). Its media proxy and chat-log entries are rewritten
+ * to the new path. Guards against escaping the vault, the internal `.privy` area, and
+ * moving a folder into itself or a descendant.
+ */
+export async function moveItems(root: string, target: string, srcRels: string[]): Promise<string[]> {
+  const base = privyBase(root);
+  const internal = join(base, '.privy');
+  if (badSegment(target)) throw new Error('unsafe target');
+  const targetBase = target === '' ? base : resolveSafe(base, target);
+  if (!targetBase || targetBase === internal || targetBase.startsWith(internal + '/')
+    || !existsSync(targetBase) || !statSync(targetBase).isDirectory()) {
+    throw new Error('unsafe target');
+  }
+  const created: string[] = [];
+  for (const srcRel of srcRels) {
+    if (badSegment(srcRel)) throw new Error('unsafe move path');
+    const srcAbs = resolveSafe(base, srcRel);
+    if (!srcAbs || srcAbs === internal || srcAbs.startsWith(internal + '/')) throw new Error('unsafe move path');
+    if (!existsSync(srcAbs)) throw new Error('not found');
+    const st = statSync(srcAbs);
+    const destRel = uniqueRel(root, target, basename(srcRel));
+    const destAbs = resolveSafe(base, destRel)!;
+    if (destAbs === srcAbs || (st.isDirectory() && destAbs.startsWith(srcAbs + '/'))) throw new Error('cannot move into itself');
+    if (existsSync(destAbs)) throw new Error('already exists');
+    await moveFile(srcAbs, destAbs);
+    const kind = detectKind(basename(srcRel), st.isDirectory());
+    if (kind === 'video' || kind === 'image') {
+      const oldProxy = proxyPathFor(root, srcRel, kind);
+      if (existsSync(oldProxy)) await moveFile(oldProxy, proxyPathFor(root, destRel, kind));
+      const pending = pendingPathFor(root, srcRel, kind);
+      if (existsSync(pending)) await rm(pending, { force: true });
+    }
+    await renameEntries(root, srcRel, destRel);
+    created.push(destRel);
   }
   return created;
 }

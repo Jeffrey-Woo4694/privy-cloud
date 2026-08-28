@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KINDS, type ChatEntry, type FileItem, type Kind } from '@privy/shared';
 import { api } from '../api';
 import type { DropItem } from '../dropPayload';
@@ -39,6 +39,11 @@ export function PrivyCloudTab() {
   const [menu, setMenu] = useState<{ x: number; y: number; ctx: MenuContext } | null>(null);
   const [renaming, setRenaming] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TrashItem | null>(null);
+  // File-manager grid state: single-click selection + a copy/paste clipboard that
+  // survives navigation (copy in one folder, paste into another).
+  const [selection, setSelection] = useState<Set<string>>(() => new Set());
+  const [rangeAnchor, setRangeAnchor] = useState<string | null>(null); // last plain-clicked path, for Shift+click range select
+  const [clipboard, setClipboard] = useState<{ mode: 'copy' | 'cut'; items: FileItem[] }>({ mode: 'copy', items: [] });
 
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
@@ -105,10 +110,30 @@ export function PrivyCloudTab() {
   const navigate = (newLoc: Location) => {
     setLoc(newLoc);
     setCreating(null); setNewName(''); // never carry an open create dialog into a new location
+    setSelection(new Set()); // entering a new directory clears the grid selection (clipboard persists)
+    setRangeAnchor(null);
     if (newLoc.type === 'trash') refreshTrash();
   };
 
-  const handleTileSelect = (item: FileItem) => {
+  // File-manager model: a single click SELECTS the tile; a double click opens it.
+  // Shift+click selects the contiguous range from the last clicked tile (anchor).
+  const handleTileSelect = (item: FileItem, shiftKey: boolean) => {
+    if (shiftKey && rangeAnchor !== null) {
+      const idxA = viewItems.findIndex((i) => i.path === rangeAnchor);
+      const idxB = viewItems.findIndex((i) => i.path === item.path);
+      if (idxA >= 0 && idxB >= 0) {
+        const [s, e] = idxA <= idxB ? [idxA, idxB] : [idxB, idxA];
+        setSelection(new Set(viewItems.slice(s, e + 1).map((i) => i.path)));
+        return;
+      }
+    }
+    setSelection(new Set([item.path]));
+    setRangeAnchor(item.path);
+  };
+
+  const handleTileOpen = (item: FileItem) => {
+    setSelection(new Set());
+    setRangeAnchor(null);
     if (item.isDir) navigate({ type: 'folder', path: item.path });
     else setSelected(item);
   };
@@ -119,6 +144,69 @@ export function PrivyCloudTab() {
     parts.pop();
     navigate(parts.length === 0 ? { type: 'home' } : { type: 'folder', path: parts.join('/') });
   };
+
+  const trashPaths = async (items: FileItem[]) => {
+    if (!items.length) return;
+    try {
+      for (const it of items) await api.trashPath(it.path);
+      setSelection(new Set());
+      void refresh();
+      void refreshTrash();
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  const pasteClipboard = async () => {
+    if (!clipboard.items.length) return;
+    if (loc.type !== 'folder' && loc.type !== 'home') return;
+    const tgt = loc.type === 'folder' ? loc.path : '';
+    try {
+      await (clipboard.mode === 'cut' ? api.move : api.copy)(clipboard.items.map((i) => i.path), tgt);
+      setSelection(new Set());
+      if (clipboard.mode === 'cut') setClipboard({ mode: 'copy', items: [] }); // a cut paste is a one-time move
+      void refresh();
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  // Drag a grid tile onto a folder tile → move it into that folder.
+  const moveTo = async (fromPath: string, toFolderPath: string) => {
+    try {
+      await api.move([fromPath], toFolderPath);
+      setSelection(new Set());
+      setRangeAnchor(null);
+      void refresh();
+    } catch (e) { setError((e as Error).message); }
+  };
+
+  // Keyboard shortcuts for the grid (desktop file-manager style), only while browsing
+  // (no file viewer open), not typing in an input, and no dialog/menu is up. Uses a ref
+  // so the single window listener always reads the latest state.
+  const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => {
+    const canOperate = loc.type === 'folder' || loc.type === 'home';
+    keyRef.current = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (menu || creating || renaming || confirmDelete) return;
+      if (selected) return; // a file viewer is open — grid shortcuts are off
+      if (!canOperate) return; // recent/trash — no file-system operations
+      const sels = viewItems.filter((i) => selection.has(i.path));
+      if (!e.ctrlKey && !e.metaKey) {
+        if (e.key === 'Escape') { e.preventDefault(); goBack(); }
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === 'a') { e.preventDefault(); setSelection(new Set(viewItems.map((i) => i.path))); }
+      else if (k === 'c') { e.preventDefault(); if (sels.length) setClipboard({ mode: 'copy', items: sels }); }
+      else if (k === 'x') { e.preventDefault(); if (sels.length) setClipboard({ mode: 'cut', items: sels }); }
+      else if (k === 'd') { e.preventDefault(); void trashPaths(sels); }
+      else if (k === 'v') { e.preventDefault(); void pasteClipboard(); }
+    };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => keyRef.current(e);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Recycle bin actions.
   const trashFile = async (path: string) => {
@@ -167,7 +255,7 @@ export function PrivyCloudTab() {
     }
     if (ctx.kind !== 'item') return; // background menu: new-folder/new-file handled above
     const item = ctx.item;
-    if (action === 'open') { handleTileSelect(item); return; }
+    if (action === 'open') { handleTileOpen(item); return; }
     if (action === 'download' && !item.isDir) {
       const a = document.createElement('a');
       a.href = api.fileUrl(item.path);
@@ -253,7 +341,8 @@ export function PrivyCloudTab() {
               ))}
             </div>
           ) : (
-            <SharingGrid items={viewItems} onSelect={handleTileSelect}
+            <SharingGrid items={viewItems} onSelect={handleTileSelect} onOpen={handleTileOpen}
+              selected={selection} singleClickOpens={isMobile} onMoveTo={moveTo}
               emptyMessage={loc.type === 'recent' ? 'Nothing here yet — send something from the chat.' : 'This folder is empty.'}
               onTileContextMenu={(e, item) => openMenu(e, { kind: 'item', item })}
               renaming={renaming?.path ?? null}
