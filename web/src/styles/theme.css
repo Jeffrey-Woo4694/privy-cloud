@@ -104,6 +104,14 @@ button { font: inherit; cursor: pointer; }
 .structured-table { border-collapse: collapse; border: 1px solid var(--border); }
 .structured-table td, .structured-table th { border: 1px solid var(--border); padding: 4px 8px; }
 
+/* Byte-faithful CSV grid editor cells and the delete-column/delete-row gutter. */
+.csv-cell {
+  width: 100%; min-width: 90px; box-sizing: border-box;
+  background: var(--inputbg); border: 1px solid var(--border); color: var(--text);
+  font-family: ui-monospace, Menlo, monospace; font-size: 13px; padding: 3px 5px;
+}
+.csv-corner { width: 28px; text-align: center; }
+
 /* Drag-and-drop upload overlay on the sharing grid and the chat. pointer-events
    none so the drop still lands on the container beneath it. */
 .drop-overlay {

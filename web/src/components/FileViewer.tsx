@@ -8,6 +8,7 @@ import { MarkdownEditor } from './MarkdownEditor';
 import { MarkdownViewer } from './MarkdownViewer';
 import { TextFileEditor } from './TextFileEditor';
 import { StructuredViewer } from './StructuredViewer';
+import { CsvEditor } from './CsvEditor';
 import { CodeViewer } from './CodeViewer';
 import { AudioPlayer } from './AudioPlayer';
 import { ArchiveInfo } from './ArchiveInfo';
@@ -25,7 +26,10 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
   const [editingText, setEditingText] = useState(false);
   const [textLoaded, setTextLoaded] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [csvGrid, setCsvGrid] = useState(false); // byte-faithful CSV grid fallback (vs. OnlyOffice)
+  const [csvText, setCsvText] = useState('');
   const mode = editorFor(item.name);
+  const isCsv = mode === 'office' && /\.csv$/i.test(item.name);
   const canExpand = EDITABLE_MODES.has(mode);
 
   // The embedded editors (OnlyOffice, textarea) size to their container and only
@@ -58,6 +62,15 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
 
   useEffect(() => { setVideoFailed(false); setImageFailed(false); }, [item.path]);
 
+  // Re-opening a different file resets the CSV grid fallback.
+  useEffect(() => { setCsvGrid(false); setCsvText(''); }, [item.path]);
+
+  // Fetch the CSV text on demand so the byte-faithful grid editor can open.
+  const openCsvGrid = async () => {
+    try { setCsvText(await api.getFileText(item.path)); setCsvGrid(true); }
+    catch { /* leave the OnlyOffice editor open */ }
+  };
+
   return (
     <div className={expanded ? 'viewer viewer-fullscreen' : 'viewer'}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
@@ -71,6 +84,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
             {expanded ? '⤢ Exit fullscreen' : '⛶ Expand'}
           </button>
         )}
+        {isCsv && !csvGrid && <button className="btn" onClick={() => void openCsvGrid()} title="Edit as a byte-faithful grid (preserves quoting & line-endings)">Open as grid</button>}
         {onTrash && <button className="btn" onClick={() => onTrash(item.path)} title="Move to trash">🗑️ Trash</button>}
       </div>
       {mode === 'markdown' && textLoaded && (editingText
@@ -118,7 +132,9 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
       {mode === 'audio' && <AudioPlayer path={item.path} name={item.name} />}
       {mode === 'archive' && <ArchiveInfo item={item} />}
       {mode === 'pdf' && <div className="viewer-body"><iframe src={url} title={item.name} style={{ width: '100%', height: '100%', border: 'none' }} /></div>}
-      {mode === 'office' && <DocEditor path={item.path} name={item.name} onSaved={onSaved} onTrash={onTrash} />}
+      {mode === 'office' && (csvGrid
+        ? <CsvEditor initialText={csvText} name={item.name} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); setCsvGrid(false); }} onCancel={() => setCsvGrid(false)} />
+        : <DocEditor path={item.path} name={item.name} onSaved={onSaved} onTrash={onTrash} />)}
       {mode === 'none' && item.kind !== 'image' && item.kind !== 'video' && item.kind !== 'folder' && (
         <div className="viewer-body">
           <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
