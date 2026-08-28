@@ -112,6 +112,17 @@ button { font: inherit; cursor: pointer; }
 }
 .csv-corner { width: 28px; text-align: center; }
 
+/* List view of the sharing grid (Name | Size | Modified, sortable). */
+.list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.list-table th { text-align: left; padding: 6px 10px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+.list-table th.sortable.active { color: var(--accent); }
+.sort-arrow { font-size: 10px; }
+.list-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); }
+.list-row.selected { background: var(--chipbg); box-shadow: inset 2px 0 0 var(--accent); }
+.list-row.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.list-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.list-size, .list-modified { color: var(--muted); white-space: nowrap; }
+
 /* Drag-and-drop upload overlay on the sharing grid and the chat. pointer-events
    none so the drop still lands on the container beneath it. */
 .drop-overlay {

@@ -8,6 +8,8 @@ import { useMediaQuery } from '../useMediaQuery';
 import { SharingSidebar } from '../components/SharingSidebar';
 import { PathBar } from '../components/PathBar';
 import { SharingGrid } from '../components/SharingGrid';
+import { ListView } from '../components/ListView';
+import { sortItems, nextSort, type Sort, type SortKey } from '../sortItems';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { usePrivyHermes } from '../hermes/usePrivyHermes';
@@ -44,6 +46,13 @@ export function PrivyCloudTab() {
   const [selection, setSelection] = useState<Set<string>>(() => new Set());
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null); // last plain-clicked path, for Shift+click range select
   const [clipboard, setClipboard] = useState<{ mode: 'copy' | 'cut'; items: FileItem[] }>({ mode: 'copy', items: [] });
+  // Grid/list view + sort (persisted, like a file manager). Default grid, sort by Name ↑.
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => (localStorage.getItem('privy-view') as 'grid' | 'list') || 'grid');
+  const [sort, setSort] = useState<Sort>(() => {
+    try { return JSON.parse(localStorage.getItem('privy-sort') || '') as Sort; } catch { return { key: 'name', dir: 'asc' }; }
+  });
+  useEffect(() => { localStorage.setItem('privy-view', viewMode); }, [viewMode]);
+  useEffect(() => { localStorage.setItem('privy-sort', JSON.stringify(sort)); }, [sort]);
 
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
@@ -78,6 +87,8 @@ export function PrivyCloudTab() {
   }, [handleEvent, refreshTrash]);
 
   const viewItems = useMemo(() => itemsForLocation(loc, items), [loc, items]);
+  const sortedItems = useMemo(() => sortItems(viewItems, sort), [viewItems, sort]);
+  const onSort = useCallback((key: SortKey) => setSort((s) => nextSort(s, key)), []);
 
   // Drop a file/folder onto the sharing grid → it lands in the folder currently
   // being browsed ('home' → Privy Cloud root). Recent/Trash are virtual views — no
@@ -324,6 +335,7 @@ export function PrivyCloudTab() {
               <button className="btn" onClick={() => { setCreating(null); setNewName(''); }}>Cancel</button>
             </span>
           )}
+          <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))} title="Toggle grid/list view">{viewMode === 'grid' ? '☰ List' : '▦ Grid'}</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
           onDragOver={gridDragOver} onDragLeave={gridDragLeave} onDrop={gridDrop}>
@@ -341,13 +353,21 @@ export function PrivyCloudTab() {
               ))}
             </div>
           ) : (
-            <SharingGrid items={viewItems} onSelect={handleTileSelect} onOpen={handleTileOpen}
-              selected={selection} singleClickOpens={isMobile} onMoveTo={moveTo}
-              emptyMessage={loc.type === 'recent' ? 'Nothing here yet — send something from the chat.' : 'This folder is empty.'}
-              onTileContextMenu={(e, item) => openMenu(e, { kind: 'item', item })}
-              renaming={renaming?.path ?? null}
-              onCommitRename={(item, name) => void commitRename(item, name)}
-              onCancelRename={cancelRename} />
+            viewMode === 'list' ? (
+              <ListView items={sortedItems} onSelect={handleTileSelect} onOpen={handleTileOpen}
+                selected={selection} singleClickOpens={isMobile} onMoveTo={moveTo}
+                emptyMessage={loc.type === 'recent' ? 'Nothing here yet — send something from the chat.' : 'This folder is empty.'}
+                onTileContextMenu={(e, item) => openMenu(e, { kind: 'item', item })}
+                sort={sort} onSort={onSort} />
+            ) : (
+              <SharingGrid items={sortedItems} onSelect={handleTileSelect} onOpen={handleTileOpen}
+                selected={selection} singleClickOpens={isMobile} onMoveTo={moveTo}
+                emptyMessage={loc.type === 'recent' ? 'Nothing here yet — send something from the chat.' : 'This folder is empty.'}
+                onTileContextMenu={(e, item) => openMenu(e, { kind: 'item', item })}
+                renaming={renaming?.path ?? null}
+                onCommitRename={(item, name) => void commitRename(item, name)}
+                onCancelRename={cancelRename} />
+            )
           )}
         </div>
       </div>
