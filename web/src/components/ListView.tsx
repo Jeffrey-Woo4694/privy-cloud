@@ -25,7 +25,7 @@ export function ListView({ items, selected, singleClickOpens, onSelect, onOpen, 
   if (items.length === 0) return <div className="empty-state">{emptyMessage ?? 'Nothing here yet — send something from the chat.'}</div>;
 
   const header = (key: SortKey, label: string) => (
-    <th className={`sortable${sort.key === key ? ' active' : ''}`} onClick={() => onSort(key)} title={`Sort by ${label}`}>
+    <th className={`sortable col-${key}${sort.key === key ? ' active' : ''}`} onClick={() => onSort(key)} title={`Sort by ${label}`}>
       {label}{sort.key === key && <span className="sort-arrow">{sort.dir === 'asc' ? ' ▲' : ' ▼'}</span>}
     </th>
   );
@@ -41,7 +41,7 @@ export function ListView({ items, selected, singleClickOpens, onSelect, onOpen, 
               onClick={h.onClick} onDoubleClick={h.onDoubleClick}
               onDragStart={h.onDragStart} onDragEnd={h.onDragEnd} onDragOver={h.onDragOver} onDrop={h.onDrop}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTileContextMenu?.(e, item); }}>
-              <td className="list-name">{ICON[item.kind]} {item.name}</td>
+              <td className="list-name"><span className="list-icon">{ICON[item.kind]}</span><span className="list-fname">{item.name}</span></td>
               <td className="list-size">{item.isDir ? '—' : fmtSize(item.size)}</td>
               <td className="list-modified">{new Date(item.modifiedAt).toLocaleString()}</td>
             </tr>

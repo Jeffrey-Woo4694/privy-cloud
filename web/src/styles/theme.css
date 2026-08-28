@@ -112,16 +112,23 @@ button { font: inherit; cursor: pointer; }
 }
 .csv-corner { width: 28px; text-align: center; }
 
-/* List view of the sharing grid (Name | Size | Modified, sortable). */
+/* List view of the sharing grid (Name | Size | Modified, sortable). Rows are
+   generous so a line is an easy click/select target; hover highlights the row. */
 .list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.list-table th { text-align: left; padding: 6px 10px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+.list-table th { text-align: left; padding: 9px 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
 .list-table th.sortable.active { color: var(--accent); }
+.list-table th.col-size, .list-table th.col-modified { text-align: right; }
 .sort-arrow { font-size: 10px; }
-.list-table td { padding: 5px 10px; border-bottom: 1px solid var(--border); }
+.list-table td { border-bottom: 1px solid var(--border); vertical-align: middle; }
+.list-row { cursor: pointer; }
+.list-row:hover { background: var(--panel2); }
 .list-row.selected { background: var(--chipbg); box-shadow: inset 2px 0 0 var(--accent); }
 .list-row.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
-.list-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
-.list-size, .list-modified { color: var(--muted); white-space: nowrap; }
+.list-name { display: flex; align-items: center; gap: 8px; min-width: 0; height: 40px; padding: 0 12px; }
+.list-icon { width: 18px; flex-shrink: 0; text-align: center; }
+.list-fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-size, .list-modified { color: var(--muted); white-space: nowrap; text-align: right; padding: 0 12px; }
+.list-size { min-width: 72px; }
 
 /* Drag-and-drop upload overlay on the sharing grid and the chat. pointer-events
    none so the drop still lands on the container beneath it. */
