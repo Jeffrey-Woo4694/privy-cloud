@@ -23,6 +23,16 @@ describe('auth', () => {
     expect(onLogin).toHaveBeenCalledWith('tok');
   });
 
+  it('LoginGate masks the token input by default and reveals it on toggle', () => {
+    render(<LoginGate onLogin={() => {}} />);
+    const input = screen.getByPlaceholderText(/access token/i);
+    expect(input.getAttribute('type')).toBe('password');
+    fireEvent.click(screen.getByTitle(/show token/i));
+    expect(input.getAttribute('type')).toBe('text');
+    fireEvent.click(screen.getByTitle(/hide token/i));
+    expect(input.getAttribute('type')).toBe('password');
+  });
+
   it('LoginGate shows a validation error when present', () => {
     render(<LoginGate onLogin={() => {}} error="Invalid access token" />);
     expect(screen.getByText('Invalid access token')).toBeTruthy();
