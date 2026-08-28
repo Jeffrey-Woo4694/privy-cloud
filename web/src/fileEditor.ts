@@ -1,6 +1,6 @@
 export type EditorMode = 'office' | 'text' | 'structured' | 'markdown' | 'code' | 'audio' | 'archive' | 'pdf' | 'none';
 
-const OFFICE = new Set(['doc', 'docx', 'odt', 'rtf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp']);
+const OFFICE = new Set(['doc', 'docx', 'odt', 'rtf', 'xls', 'xlsx', 'ods', 'csv', 'ppt', 'pptx', 'odp']);
 // Source / markup / style files for the read-only highlighted viewer (CodeViewer).
 // Spelling out many languages + their headers; a language lowlight doesn't know just
 // renders plain, so a broad list only ever loses highlighting, never breaks viewing.
@@ -24,7 +24,7 @@ const CODE = new Set([
 ]);
 // Plain text (not code): displayed in the simple textarea editor.
 const TEXT = new Set(['txt', 'log', 'ini', 'toml', 'conf', 'env', 'gitignore', 'jsonl']);
-const STRUCTURED = new Set(['csv', 'json', 'xml', 'yaml', 'yml']);
+const STRUCTURED = new Set(['json', 'xml', 'yaml', 'yml']);
 const AUDIO = new Set(['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a']);
 const ARCHIVE = new Set(['zip', 'tar', 'gz', 'tgz']);
 

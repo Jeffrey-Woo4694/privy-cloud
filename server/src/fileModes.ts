@@ -1,5 +1,5 @@
 export const OFFICE_EDITABLE_EXT = new Set([
-  'doc', 'docx', 'odt', 'rtf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp',
+  'doc', 'docx', 'odt', 'rtf', 'xls', 'xlsx', 'ods', 'csv', 'ppt', 'pptx', 'odp',
 ]);
 
 export const TEXT_EXTENSIONS = new Set([
@@ -37,7 +37,7 @@ export function isTextEditable(name: string): boolean {
 
 export function officeFileType(ext: string): 'word' | 'cell' | 'slide' | null {
   if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return 'word';
-  if (['xls', 'xlsx', 'ods'].includes(ext)) return 'cell';
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(ext)) return 'cell';
   if (['ppt', 'pptx', 'odp'].includes(ext)) return 'slide';
   return null;
 }

@@ -27,7 +27,7 @@ describe('editorFor', () => {
     expect(editorFor('readme.txt')).toBe('text');
     expect(editorFor('app.log')).toBe('text');
     expect(editorFor('app.ini')).toBe('text');
-    expect(editorFor('data.csv')).toBe('structured');
+    expect(editorFor('data.csv')).toBe('office'); // CSV opens in the OnlyOffice cell editor
     expect(editorFor('config.yaml')).toBe('structured');
     expect(editorFor('note.md')).toBe('markdown');
   });

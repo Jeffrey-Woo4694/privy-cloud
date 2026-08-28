@@ -52,11 +52,9 @@ describe('FileViewer', () => {
     expect(screen.getByTestId('doc')).toBeTruthy();
   });
 
-  it('renders the structured viewer for a csv item', async () => {
-    (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('x,y\n1,2');
+  it('renders the office editor via DocEditor for a csv item', () => {
     render(<FileViewer item={csv} onBack={vi.fn()} onSaved={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText('x')).toBeTruthy());
-    expect(screen.getByText('1')).toBeTruthy();
+    expect(screen.getByTestId('doc')).toBeTruthy();
   });
 
   it('renders the code viewer for a code item', async () => {
