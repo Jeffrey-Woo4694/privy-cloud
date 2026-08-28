@@ -81,7 +81,7 @@ export function SharingGrid({ items, onSelect, onOpen, selected, singleClickOpen
             onDragStart={(e) => { setDragPath(item.path); e.dataTransfer.setData('text/plain', item.path); e.dataTransfer.effectAllowed = 'move'; }}
             onDragEnd={() => setDragPath(null)}
             onDragOver={(e) => { if (item.isDir && dragPath && dragPath !== item.path) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
-            onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('text/plain') || dragPath; setDragPath(null); if (from && from !== item.path) onMoveTo?.(from, item.path); }}
+            onDrop={(e) => { e.preventDefault(); const from = e.dataTransfer.getData('text/plain') || dragPath; setDragPath(null); if (item.isDir && from && from !== item.path) onMoveTo?.(from, item.path); }}
             onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTileContextMenu?.(e, item); }}>
             {body}
           </button>

@@ -49,4 +49,15 @@ describe('SharingGrid', () => {
     fireEvent.drop(dirTile, { dataTransfer: dt });
     expect(onMoveTo).toHaveBeenCalledWith('a.txt', 'Docs');
   });
+
+  it('does not move when dropped onto a file tile (silently undoes the drag)', () => {
+    const onMoveTo = vi.fn();
+    const dt = { setData: vi.fn(), getData: vi.fn(() => 'Docs'), dropEffect: '', effectAllowed: '' };
+    render(<SharingGrid items={[file, dir]} onSelect={vi.fn()} onOpen={vi.fn()} onMoveTo={onMoveTo} />);
+    const dirTile = screen.getByRole('button', { name: /Docs/ });
+    const fileTile = screen.getByRole('button', { name: /a\.txt/ });
+    fireEvent.dragStart(dirTile, { dataTransfer: dt });
+    fireEvent.drop(fileTile, { dataTransfer: dt }); // dropped onto a FILE, not a folder
+    expect(onMoveTo).not.toHaveBeenCalled();
+  });
 });
