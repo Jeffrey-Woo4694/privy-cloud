@@ -22,27 +22,39 @@ export function buildEditorConfig(session: Session, name: string, onSaved: () =>
 }
 
 export function DocEditor({ path, name, onSaved, onTrash }: { path: string; name: string; onSaved(): void; onTrash?: (p: string) => void }) {
-  const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>('loading');
+  const [state, setState] = useState<'loading' | 'ready' | 'unavailable' | 'locked'>('loading');
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState('');
-  // The one-use office session token, held so unmount can release the file lock.
+  const [force, setForce] = useState(false);
+  // The one-use office session token, held so unmount/pagehide can release the file lock.
   const tokenRef = useRef<string | undefined>(undefined);
+  const downloadUrl = `${API_BASE}/api/file?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`;
 
   useEffect(() => {
     let cancelled = false;
-    api.officeSession(path)
+    api.officeSession(path, force)
       .then((s) => { if (cancelled) return; if (s.token) tokenRef.current = s.token; setSession(s); setState(s.enabled ? 'ready' : 'unavailable'); })
-      .catch(() => !cancelled && setState('unavailable'));
+      .catch((e) => {
+        if (cancelled) return;
+        // A stale lock is distinct from a disabled/unreachable engine: it is recoverable
+        // by force-reopening, so surface it separately instead of giving up.
+        setState(!force && (e as Error)?.message === 'already being edited' ? 'locked' : 'unavailable');
+      });
     return () => { cancelled = true; };
-  }, [path]);
+  }, [path, force]);
 
-  // On unmount (navigating back to the file list), release the file lock so the same
-  // document can be reopened without the engine reporting "already being edited".
+  // Release the file lock so a reopened document isn't reported "already being edited".
+  // Fired on unmount (Back to the file list) AND on `pagehide` (closing the tab/window
+  // while the editor is open) — the latter otherwise strands the lock for the whole TTL.
+  // The release fetch uses keepalive so it survives the unload; tokenRef is cleared on
+  // the first release, so a later unmount is a no-op (never a double-release).
   useEffect(() => {
-    return () => {
+    const release = () => {
       const t = tokenRef.current;
       if (t) { tokenRef.current = undefined; void api.endOfficeSession(t); }
     };
+    window.addEventListener('pagehide', release);
+    return () => { window.removeEventListener('pagehide', release); release(); };
   }, []);
 
   useEffect(() => {
@@ -58,13 +70,29 @@ export function DocEditor({ path, name, onSaved, onTrash }: { path: string; name
     return () => { script.remove(); };
   }, [state, session, name, onSaved]);
 
+  if (state === 'locked') {
+    return (
+      <div className="viewer-body">
+        <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
+          <div style={{ fontSize: 40 }}>🔒</div>
+          <p>This document is open in another window, or a previous session didn't close cleanly.</p>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button className="btn primary" onClick={() => setForce(true)}>Reopen anyway</button>
+            <a className="btn" href={downloadUrl} download={name}>Download original</a>
+          </div>
+          <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 8 }}>Reopening disconnects the other editor and takes over this document.</div>
+        </div>
+        {onTrash && <button className="btn" onClick={() => onTrash(path)}>🗑️ Trash</button>}
+      </div>
+    );
+  }
   if (state === 'unavailable') {
     return (
       <div className="viewer-body">
         <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
           <div style={{ fontSize: 40 }}>📄</div>
           <p>Editor unavailable. Use "Download original".</p>
-          <a className="btn" href={`${API_BASE}/api/file?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`} download={name}>Download</a>
+          <a className="btn" href={downloadUrl} download={name}>Download</a>
         </div>
         {onTrash && <button className="btn" onClick={() => onTrash(path)}>🗑️ Trash</button>}
       </div>

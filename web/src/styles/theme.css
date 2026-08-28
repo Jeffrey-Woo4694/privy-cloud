@@ -102,6 +102,15 @@ button { font: inherit; cursor: pointer; }
 .structured-table { border-collapse: collapse; border: 1px solid var(--border); }
 .structured-table td, .structured-table th { border: 1px solid var(--border); padding: 4px 8px; }
 
+/* Drag-and-drop upload overlay on the sharing grid and the chat. pointer-events
+   none so the drop still lands on the container beneath it. */
+.drop-overlay {
+  position: absolute; inset: 0; z-index: 20; pointer-events: none;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 12px; border-radius: 8px; border: 2px dashed var(--accent);
+  background: rgba(0, 0, 0, 0.35); color: var(--text); font-size: 14px; font-weight: 600;
+}
+
 /* ---- Agent markdown (Hermes tab + chat bot) ----------------------------
    The code-block header (language + copy button) is the signature element;
    the prose stays quiet and every color comes from the existing CSS tokens

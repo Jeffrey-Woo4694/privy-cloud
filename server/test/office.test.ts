@@ -72,6 +72,21 @@ describe('office provider', () => {
     expect(p.validateToken(info2.token!)).toBeTruthy();
   });
 
+  it('force evicts a stale lock so the file can be reopened without waiting for the TTL', async () => {
+    const p = await makeProvider();
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'i.docx'), 'x');
+    const info1 = p.createSession('Documents/i.docx');
+    expect(() => p.createSession('Documents/i.docx')).toThrow(); // locked
+    // Without force the file is still locked; with force the stale session is evicted
+    // and a fresh one is minted, so a stale close-save can't race the new session.
+    const info2 = p.createSession('Documents/i.docx', true);
+    expect(info2.enabled).toBe(true);
+    expect(info2.token).not.toBe(info1.token);
+    expect(p.validateToken(info1.token!)).toBeNull();
+    expect(p.validateToken(info2.token!)).toBeTruthy();
+  });
+
   it('a status-0 callback (editor closed) releases the lock so the file can be reopened', async () => {
     const p = await makeProvider();
     mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });

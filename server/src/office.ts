@@ -115,17 +115,21 @@ export class OfficeProvider {
     }
   }
 
-  createSession(rel: string): OfficeSessionInfo {
+  createSession(rel: string, force = false): OfficeSessionInfo {
     if (!this.isConfigured()) return { enabled: false };
     this.sweepExpired(); // release any abandoned lock before the LOCKED check
     const name = basename(rel);
     if (!isOfficeEditable(name)) throw httpError('NOT_OFFICE', 'not an office document');
-    if (this.locked.has(rel)) throw httpError('LOCKED', 'already being edited');
+    if (this.locked.has(rel) && !force) throw httpError('LOCKED', 'already being edited');
     // A session that was released on unmount (rel not in `locked`) is abandoned:
     // the user is reopening the file, so the fresh session is authoritative and a
-    // stale close-time save (a token we're about to evict) must not race it.
+    // stale close-time save (a token we're about to evict) must not race it. With
+    // `force` — a genuinely stale lock from a closed window — we also drop the old
+    // session AND its lock so the file can be reopened without waiting for the TTL.
+    // `force` is only ever reached by an explicit user "reopen", so a truly concurrent
+    // editor is only evicted when the user deliberately takes over.
     for (const [token, s] of this.sessions) {
-      if (s.rel === rel) this.sessions.delete(token);
+      if (s.rel === rel) { this.sessions.delete(token); this.locked.delete(s.rel); }
     }
     const base = privyBase(this.getRoot());
     const abs = resolveSafe(base, rel);

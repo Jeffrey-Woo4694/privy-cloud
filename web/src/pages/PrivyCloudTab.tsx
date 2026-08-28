@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { KINDS, type ChatEntry, type FileItem, type Kind } from '@privy/shared';
 import { api } from '../api';
+import type { DropItem } from '../dropPayload';
+import { useFileDrop } from '../useFileDrop';
 import { connect } from '../ws';
 import { useMediaQuery } from '../useMediaQuery';
 import { SharingSidebar } from '../components/SharingSidebar';
@@ -71,6 +73,18 @@ export function PrivyCloudTab() {
   }, [handleEvent, refreshTrash]);
 
   const viewItems = useMemo(() => itemsForLocation(loc, items), [loc, items]);
+
+  // Drop a file/folder onto the sharing grid → it lands in the folder currently
+  // being browsed ('home' → Privy Cloud root). Recent/Trash are virtual views — no
+  // folder to write into, so drop is disabled there. Files are written via the
+  // upload endpoint (no chat entry); the grid refreshes afterwards.
+  const dropTarget = loc.type === 'folder' ? loc.path : loc.type === 'home' ? '' : null;
+  const { dragging: gridDragging, onDragOver: gridDragOver, onDragLeave: gridDragLeave, onDrop: gridDrop } =
+    useFileDrop(async (items: DropItem[]) => {
+      if (dropTarget === null) return;
+      try { await api.uploadFiles(dropTarget, items); void refresh(); }
+      catch (e) { setError((e as Error).message); }
+    }, dropTarget === null);
 
   const sendText = async (text: string) => { await api.sendText(text); void refresh(); };
   const sendFiles = async (files: File[]) => { await api.sendFiles(files); void refresh(); };
@@ -223,7 +237,9 @@ export function PrivyCloudTab() {
             </span>
           )}
         </div>
-        <div style={{ flex: 1, overflowY: 'auto' }} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}>
+        <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
+          onDragOver={gridDragOver} onDragLeave={gridDragLeave} onDrop={gridDrop}>
+          {gridDragging && <div className="drop-overlay">Drop to upload into this folder</div>}
           {loc.type === 'trash' ? (
             <div className="trash-list">
               {trashItems.length === 0 && <div className="empty-state">Trash is empty.</div>}

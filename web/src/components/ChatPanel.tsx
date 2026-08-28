@@ -3,6 +3,9 @@ import { KINDS, type ChatEntry, type Kind } from '@privy/shared';
 import type { PrivyBotMessage } from '../hermes/usePrivyHermes';
 import { Markdown } from './Markdown';
 import { api } from '../api';
+import { useFileDrop } from '../useFileDrop';
+import type { DropItem } from '../dropPayload';
+import { partitionDrop } from '../dropPayload';
 
 const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
 
@@ -66,6 +69,16 @@ export function ChatPanel(props: {
   const dirRef = useRef<HTMLInputElement>(null);
   const sharingRef = useRef<HTMLDivElement>(null);
   const hermesRef = useRef<HTMLDivElement>(null);
+
+  // Drop a file/folder onto the chat → it uploads to its kind category (file → the
+  // Images/Videos/… folder by type; directory → Folders/<name>), the same as the
+  // 📎 / 📁 buttons. Loose files and directories may arrive in one drop, so partition
+  // them: each directory group keeps its structure via webkitRelativePath.
+  const { dragging, onDragOver, onDragLeave, onDrop } = useFileDrop((items: DropItem[]) => {
+    const { files, folders } = partitionDrop(items);
+    if (files.length) props.onSendFiles(files);
+    for (const folderFiles of folders) props.onSendFolder(folderFiles);
+  });
 
   // The @-mentionable roles (default agent + installed profiles). Best-effort:
   // on failure the default role keeps working.
@@ -136,7 +149,9 @@ export function ChatPanel(props: {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
+      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      {dragging && <div className="drop-overlay">Drop to upload to your library</div>}
       <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
         <button className={`chat-tab${activeTab === 'sharing' ? ' active' : ''}`} onClick={() => switchTab('sharing')}>Sharing</button>
         <button className={`chat-tab${activeTab === 'hermes' ? ' active' : ''}`} onClick={() => switchTab('hermes')}>

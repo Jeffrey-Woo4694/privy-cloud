@@ -1,4 +1,4 @@
-import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, createWriteStream, writeFileSync, existsSync, rmSync, statSync, createReadStream } from 'node:fs';
 import { rename, copyFile, rm } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -86,6 +86,55 @@ export async function storeFolder(root: string, folderName: string, files: Array
     await writeAbs(root, rel, f.data);
   }
   return appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
+}
+
+/** Reject a path segment that could escape the vault (`..`) or hide a dotfile. */
+function badSegment(s: string): boolean {
+  return s.split(/[/\\]/).some((seg) => seg && (seg === '..' || seg.startsWith('.')));
+}
+
+/** A collision-free rel (relative to `Privy Cloud/`) for `name` inside `dirRel` (''=root). */
+function uniqueRel(root: string, dirRel: string, name: string): string {
+  const ext = extname(name);
+  const base = basename(name, ext);
+  const mk = (n: string) => (dirRel ? `${dirRel}/${n}` : n);
+  const free = (rel: string) => !existsSync(resolveSafe(privyBase(root), rel)!);
+  if (free(mk(name))) return mk(name);
+  for (let n = 0; ; n++) {
+    const suffix = n === 0 ? stamp() : `${stamp()}-${n}`;
+    const cand = mk(`${base}-${suffix}${ext}`);
+    if (free(cand)) return cand;
+  }
+}
+
+/**
+ * Write dropped uploads (loose files and/or a directory tree) into a target folder
+ * of the vault. `targetRel` is the destination folder's rel ('' = Privy Cloud root);
+ * each item carries `base` (the dropped directory's name, '' for a loose file) and
+ * `rel` (the file's path under `base`). Every write is guarded against escaping the
+ * vault and landing in the internal `.privy` area, and never overwrites an existing
+ * file. Returns the created rel paths.
+ */
+export async function uploadInto(
+  root: string,
+  targetRel: string,
+  items: Array<{ base: string; rel: string; tmpPath: string }>,
+): Promise<string[]> {
+  const privy = privyBase(root);
+  const internal = join(privy, '.privy');
+  const created: string[] = [];
+  for (const item of items) {
+    if (badSegment(item.base) || badSegment(item.rel) || badSegment(targetRel)) throw new Error('unsafe upload path');
+    const rel = [targetRel, item.base, item.rel].filter((s) => s && s !== '.').join('/');
+    const abs = resolveSafe(privy, rel);
+    if (!abs) throw new Error('unsafe upload path');
+    if (abs === internal || abs.startsWith(internal + '/')) throw new Error('unsafe upload path');
+    const dirRel = dirname(rel);
+    const finalRel = uniqueRel(root, dirRel === '.' ? '' : dirRel, basename(rel));
+    await writeAbs(root, finalRel, createReadStream(item.tmpPath));
+    created.push(finalRel);
+  }
+  return created;
 }
 
 /** An error carrying a structured code that the API route maps to an HTTP status. */

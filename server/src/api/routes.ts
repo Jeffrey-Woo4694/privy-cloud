@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
 import { listItems, resolveSafe, initRootStructure, privyBase, proxyPathFor } from '../directory.js';
-import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, renameItem } from '../storage.js';
+import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, renameItem, uploadInto } from '../storage.js';
 import { readEntries } from '../chatLog.js';
 import { loadPermissions } from '../permissions.js';
 import { detectKind } from '../kinds.js';
@@ -147,10 +147,10 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
   app.get('/api/office/session', async (req, reply) => {
     const office = ctx.office;
     if (!office || !office.isConfigured()) return { enabled: false };
-    const rel = (req.query as { path?: string }).path ?? '';
+    const { path: rel = '', force = '' } = (req.query as { path?: string; force?: string });
     if (!privyResolve(ctx, rel)) return reply.code(400).send({ error: 'unsafe path' });
     try {
-      const info = office.createSession(rel);
+      const info = office.createSession(rel, force === '1' || force === 'true');
       if ('enabled' in info && !info.enabled) return { enabled: false };
       return info;
     } catch (err) {
@@ -283,6 +283,46 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
       // files it already moved): never leave temp litter behind.
       rmSync(tmpDir, { recursive: true, force: true });
       throw err;
+    }
+  });
+
+  // Upload dropped files into a specific vault folder — the sharing grid's current
+  // folder. Unlike /api/send/file|folder (which lands in a kind category, used by the
+  // chat), this writes into the exact `path` ('' = Privy Cloud root). Each file part
+  // is preceded by `base` (dropped directory name, '' for a loose file) and `rel`
+  // (the file's path beneath `base`), mirroring the send/folder part protocol.
+  app.post('/api/upload', async (req, reply) => {
+    const { path: targetRel = '' } = (req.query as { path?: string });
+    if (!privyResolve(ctx, targetRel)) return reply.code(400).send({ error: 'unsafe path' });
+    const parts = (req as unknown as { parts(): AsyncIterable<UploadPart> }).parts();
+    let pendingBase = '';
+    let pendingRel = '';
+    const tmpDir = mkdtempSync(join(tmpdir(), 'privy-upload-'));
+    const items: Array<{ base: string; rel: string; tmpPath: string }> = [];
+    try {
+      for await (const part of parts) {
+        if (part.type === 'file') {
+          const rel = pendingRel || part.filename || 'file';
+          const base = pendingBase;
+          const tmpPath = join(tmpDir, `${items.length}-${basename(rel) || 'part'}`);
+          await pipeline(part.file, createWriteStream(tmpPath));
+          items.push({ base, rel, tmpPath });
+          pendingBase = ''; pendingRel = '';
+        } else if (part.fieldname === 'base') { pendingBase = String(part.value ?? ''); }
+        else if (part.fieldname === 'rel') { pendingRel = String(part.value ?? ''); }
+      }
+      const created = await uploadInto(ctx.getRoot(), targetRel, items);
+      for (const rel of created) {
+        const kind = detectKind(rel.split('/').pop() ?? '', false);
+        if (kind === 'video' || kind === 'image') void ensureProxy(ctx.getRoot(), rel, kind, ctx.emit);
+      }
+      ctx.emit({ type: 'items:changed', path: targetRel, change: 'created' });
+      return { created };
+    } catch (err) {
+      rmSync(tmpDir, { recursive: true, force: true });
+      throw err;
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
     }
   });
 

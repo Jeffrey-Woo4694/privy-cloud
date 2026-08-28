@@ -55,4 +55,27 @@ describe('office integration (stub engine)', () => {
     expect(existsSync(backups) && readdirSync(backups).length > 0).toBe(true);
     await app.close();
   });
+
+  it('force=1 evicts a stale lock so the file can be reopened without waiting for the TTL', async () => {
+    process.env.HERMES_ENABLED = '0';
+    root = mkdtempSync(join(tmpdir(), 'privy-int-'));
+    await initRootStructure(root);
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 's.docx'), 'x');
+    const app = await buildApp({ root, token: 'test-token', officeEngineUrl: 'http://127.0.0.1:9' });
+    const AUTH = { authorization: 'Bearer test-token' };
+    const url = (suffix: string) => '/api/office/session?path=' + encodeURIComponent('Documents/s.docx') + suffix;
+    const s1 = await app.inject({ method: 'GET', url: url(''), headers: AUTH });
+    expect(s1.json().enabled).toBe(true);
+    const tok1 = s1.json().token as string;
+    // A second {non-force} open of the still-locked file is rejected.
+    const locked = await app.inject({ method: 'GET', url: url(''), headers: AUTH });
+    expect(locked.statusCode).toBe(409);
+    // force=1 evicts the stale session and mints a fresh, authoritative one.
+    const s2 = await app.inject({ method: 'GET', url: url('&force=1'), headers: AUTH });
+    expect(s2.statusCode).toBe(200);
+    expect(s2.json().enabled).toBe(true);
+    expect(s2.json().token).not.toBe(tok1);
+    await app.close();
+  });
 });

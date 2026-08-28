@@ -1,4 +1,5 @@
 import type { ChatEntry, FileItem, Kind } from '@privy/shared';
+import type { DropItem } from './dropPayload';
 import { getToken } from './auth';
 
 // Same-origin by default so the UI works when served by the backend (localhost, LAN, or tunnel).
@@ -51,6 +52,18 @@ export const api = {
     return r.entry;
   },
   listChat: (limit = 50): Promise<ChatEntry[]> => req(`/api/chat?limit=${limit}`),
+  // Drop files/folders into a specific vault folder (the sharing grid's current
+  // folder). 'path' is the target folder rel ('' = Privy Cloud root); each item is
+  // sent as `base` + `rel` fields immediately before its `file` part.
+  uploadFiles: (path: string, items: DropItem[]): Promise<{ created: string[] }> => {
+    const fd = new FormData();
+    for (const it of items) {
+      fd.append('base', it.base);
+      fd.append('rel', it.rel);
+      fd.append('file', it.file, it.file.name);
+    }
+    return req(`/api/upload?path=${encodeURIComponent(path)}`, { method: 'POST', body: fd });
+  },
   getMeta: (): Promise<{ root: string; owner: string }> => req('/api/meta'),
   setRoot: async (path: string): Promise<string> =>
     (await req<{ root: string }>('/api/settings/root', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path }) })).root,
@@ -77,8 +90,8 @@ export const api = {
     req('/api/items', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parentPath, name, kind: 'file', content }) }),
   rename: (path: string, newName: string): Promise<{ path: string }> =>
     req('/api/rename', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, newName }) }),
-  officeSession: (path: string): Promise<{ enabled: boolean; token?: string; key?: string; fileUrl?: string; callbackUrl?: string; engineUrl?: string; fileType?: string; title?: string; expiresAt?: string }> =>
-    req(`/api/office/session?path=${encodeURIComponent(path)}`),
+  officeSession: (path: string, force = false): Promise<{ enabled: boolean; token?: string; key?: string; fileUrl?: string; callbackUrl?: string; engineUrl?: string; fileType?: string; title?: string; expiresAt?: string }> =>
+    req(`/api/office/session?path=${encodeURIComponent(path)}${force ? '&force=1' : ''}`),
   endOfficeSession: (token: string): Promise<{ ok: boolean }> =>
-    req('/api/office/session', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) }),
+    req('/api/office/session', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }), keepalive: true }),
 };

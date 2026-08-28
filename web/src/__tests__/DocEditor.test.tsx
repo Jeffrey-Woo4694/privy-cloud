@@ -1,4 +1,4 @@
-import { render, screen, cleanup, act } from '@testing-library/react';
+import { render, screen, cleanup, act, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { DocEditor, buildEditorConfig } from '../components/DocEditor';
 import { api } from '../api';
@@ -33,6 +33,21 @@ describe('DocEditor', () => {
     (api.officeSession as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ enabled: false });
     render(<DocEditor path="Documents/a.docx" name="a.docx" onSaved={() => {}} />);
     expect(await screen.findByText(/Editor unavailable/)).toBeTruthy();
+  });
+
+  it('shows a locked message and reopens via force, evicting a stale lock', async () => {
+    const officeSession = api.officeSession as unknown as ReturnType<typeof vi.fn>;
+    officeSession
+      .mockRejectedValueOnce(new Error('already being edited')) // first open → 409 locked
+      .mockResolvedValueOnce({ enabled: true, token: 'tok-2', key: 'k', fileUrl: 'u', callbackUrl: 'c', engineUrl: 'https://doc.example', fileType: 'word', fileExt: 'docx' });
+    render(<DocEditor path="Documents/a.docx" name="a.docx" onSaved={() => {}} />);
+    // A stale lock is distinguished from a disabled engine.
+    expect(await screen.findByText(/open in another window|previous session didn't close/i)).toBeTruthy();
+    fireEvent.click(screen.getByText(/reopen anyway/i));
+    expect(officeSession).toHaveBeenLastCalledWith('Documents/a.docx', true);
+    await act(async () => {});
+    // force succeeded → the editor is ready and the locked message is gone.
+    expect(screen.queryByText(/reopen anyway/i)).toBeNull();
   });
 
   it('sends the real extension as document.fileType and the kind as top-level documentType', () => {
