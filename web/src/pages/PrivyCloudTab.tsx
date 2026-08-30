@@ -187,13 +187,6 @@ export function PrivyCloudTab() {
     enterLocation(history[historyIndex + 1]);
   };
 
-  // Phone file browser: the subheader "← Back" walks up the folder history, and
-  // only returns to the chat once you're back at the top (Home / root).
-  const backFromFiles = () => {
-    if (historyIndex > 0) goBack();
-    else setMobileFiles(false);
-  };
-
   // File-manager model: a single click SELECTS the tile; a double click opens it.
   // Shift+click selects the contiguous range from the last clicked tile (anchor).
   const handleTileSelect = (item: FileItem, shiftKey: boolean) => {
@@ -393,8 +386,10 @@ export function PrivyCloudTab() {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-          {!isMobile && <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
-            canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} /></div>}
+          <div style={isMobile ? { flexShrink: 0 } : { flex: 1, minWidth: 0 }}>
+            <PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
+              canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} compact={isMobile} />
+          </div>
           <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
             <div className="trail" role="group" aria-label="view options">
               <button className="trail-btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
@@ -480,7 +475,7 @@ export function PrivyCloudTab() {
         {mobileFiles ? (
           <>
             <div className="mobile-subheader">
-              <button className="btn" onClick={backFromFiles} aria-label="back to chat">← Back</button>
+              <button className="btn" onClick={() => setMobileFiles(false)} aria-label="back to chat">← Back</button>
               <span style={{ flex: 1 }} />
               <span className="mobile-subtitle">Shared files</span>
             </div>

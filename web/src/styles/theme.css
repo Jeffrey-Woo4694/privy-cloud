@@ -494,7 +494,10 @@ button { font: inherit; cursor: pointer; }
 .mobile-drawer-divider { border-top: 1px solid var(--border); margin: 8px 4px; }
 
 /* Mobile sub-header inside a tab (chat ← → browse files / sessions toggle). */
-.mobile-subheader { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+/* A fixed min-height so the subheader is the same height whether its left button
+   is text-only (files: "← Back") or carries an icon (chat: "Files") — otherwise the
+   3px button-height difference shifts the content on toggle. */
+.mobile-subheader { display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-height: 51px; background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .mobile-subtitle { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 /* Phone place row: the sidebar's virtual places + category folders as a
    horizontally scrollable chip rail above the grid. */

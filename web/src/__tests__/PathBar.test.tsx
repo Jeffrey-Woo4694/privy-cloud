@@ -42,4 +42,15 @@ describe('PathBar', () => {
     fireEvent.click(screen.getByLabelText('forward'));
     expect(base.onForward).toHaveBeenCalled();
   });
+
+  it('compact renders only the nav group — no breadcrumb field or Home crumb', () => {
+    const base = renderBar({ compact: true });
+    expect(screen.getByLabelText('back')).toBeInTheDocument();
+    expect(screen.getByLabelText('forward')).toBeInTheDocument();
+    expect(document.querySelector('.path-field')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Home' })).toBeNull();
+    expect(screen.queryByText('sub')).toBeNull();
+    fireEvent.click(screen.getByLabelText('back'));
+    expect(base.onBack).toHaveBeenCalled();
+  });
 });
