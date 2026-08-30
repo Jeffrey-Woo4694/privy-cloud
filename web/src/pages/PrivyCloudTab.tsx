@@ -130,6 +130,9 @@ export function PrivyCloudTab() {
       const kind = (KINDS.find((k) => k.extensions.includes(ext))?.key ?? 'other') as Kind;
       return { name: path.split('/').pop() ?? path, path, kind, size: 0, isDir: false, modifiedAt: '' };
     })();
+    // A folder (e.g. a directory shared via the chat) should navigate the grid into it,
+    // not open a viewer that just says "folders are shown in the grid".
+    if (found.isDir) { navigate({ type: 'folder', path: found.path }); return; }
     setSelected(found);
   };
   const onSaved = async () => {

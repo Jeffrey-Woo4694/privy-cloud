@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FileItem } from '@privy/shared';
 import { api, API_BASE } from '../api';
 import { getToken } from '../auth';
@@ -38,16 +38,26 @@ export function FileViewer({ item, onBack, onSaved, onTrash }: { item: FileItem;
   // collapses back). Harmless for viewers that don't listen.
   useEffect(() => { window.dispatchEvent(new Event('resize')); }, [expanded]);
 
-  // F2 expands the editor fullscreen; Esc exits it. Capture phase so it runs before
-  // other handlers. (Keys pressed while focus is inside the cross-origin OnlyOffice
-  // iframe do NOT reach this parent window — there the editor's own F2/Esc win, and the
-  // on-screen Expand/Exit button is the reliable path.)
+  // F2 toggles the editor fullscreen (editable modes only); Esc exits fullscreen first,
+  // then closes the file back to the grid. Capture phase so it runs before other handlers
+  // and for non-editable viewers too. (Keys while focus is inside the cross-origin
+  // OnlyOffice iframe do NOT reach this parent window — there the editor's own F2/Esc win,
+  // and the on-screen Expand/Exit button is the reliable path. Esc is also not stolen
+  // while typing in an embedded editor, so it never discards an in-progress edit.)
+  const onBackRef = useRef(onBack);
+  useEffect(() => { onBackRef.current = onBack; });
   useEffect(() => {
-    if (!canExpand) return;
     const onKey = (e: KeyboardEvent) => {
-      // F2 toggles fullscreen (either direction); Esc always exits.
-      if (e.key === 'F2') { e.preventDefault(); setExpanded((v) => !v); }
-      else if (e.key === 'Escape' && expanded) { e.preventDefault(); setExpanded(false); }
+      if (e.key === 'F2') {
+        if (!canExpand) return;
+        e.preventDefault(); setExpanded((v) => !v);
+      } else if (e.key === 'Escape') {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        e.preventDefault();
+        if (canExpand && expanded) setExpanded(false);
+        else onBackRef.current();
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
