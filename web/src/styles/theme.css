@@ -471,9 +471,15 @@ button { font: inherit; cursor: pointer; }
 /* The drawer width and the distance the content slides are the same CSS var, so
    they always line up. */
 .mobile-shell { position: relative; height: 100%; overflow: hidden; --drawer-w: min(85vw, 300px); }
-.mobile-content { height: 100%; display: flex; flex-direction: column; transition: transform .25s ease; }
+/* The top bar is pinned to the *visual* viewport (iOS anchors fixed elements to
+   it), so it stays put while the keyboard opens instead of sliding up with the
+   page for a frame. The content below is padded so nothing hides under it.
+   When the drawer opens, .mobile-content gains a transform and becomes the
+   containing block, so the top bar slides with the panel exactly as before. */
+.mobile-content { height: 100%; display: flex; flex-direction: column; padding-top: 54px; transition: transform .25s ease; }
 .mobile-content.open { transform: translateX(var(--drawer-w)); }
 .mobile-topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
   display: flex; align-items: center; gap: 6px; padding: 8px 10px; flex-shrink: 0;
   background: var(--bg);
 }
