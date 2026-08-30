@@ -187,7 +187,7 @@ export function ChatPanel(props: {
         )}
         <div className="send-input">
           <input value={text} placeholder={activeTab === 'sharing' ? 'Send message, file, folder, or @hermes…' : 'Message Hermes…'}
-            onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} />
+            onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} autoComplete="off" enterKeyHint="send" />
           <button className="btn" aria-label="attach file" onClick={() => fileRef.current?.click()} title="Attach file"><ShapeIcon name="paperclip" size={16} /></button>
           <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()} title="Attach folder"><ShapeIcon name="folder" size={16} /></button>
           <button className="btn primary" disabled={!text.trim()} onClick={() => submit(text)}>Send</button>

@@ -185,7 +185,9 @@ button { font: inherit; cursor: pointer; }
   padding: 6px 6px 6px 14px;
   box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim);
 }
-.send-input input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text); outline: none; font: inherit; }
+/* 16px (not the inherited 14px) keeps iOS Safari from auto-zooming/scaling the
+   whole page the moment this input gains focus. */
+.send-input input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text); outline: none; font: inherit; font-size: 16px; }
 .send-input .btn { flex-shrink: 0; border-radius: 999px; padding: 6px 12px; }
 /* Standard buttons — their original fills, etched with the glass edge. The solid
    accent/danger buttons drop the hairline so the CTA still reads as the loudest. */
