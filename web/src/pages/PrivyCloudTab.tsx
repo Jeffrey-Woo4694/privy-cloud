@@ -355,18 +355,18 @@ export function PrivyCloudTab() {
             </span>
           )}
           <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-            <div style={{ position: 'relative' }}>
-              <button className="btn" onClick={() => setViewOptionsOpen((o) => !o)} aria-label="View options" aria-expanded={viewOptionsOpen} title="View options"
-                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><DotsIcon /></button>
-              <ViewOptions open={viewOptionsOpen} onClose={() => setViewOptionsOpen(false)} sort={sort} onSort={onSortPreset}
-                displaySize={displaySize} onDisplaySize={onDisplaySize} showHidden={showHidden} onShowHidden={onShowHidden} />
-            </div>
             <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
               title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
               aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
               {viewMode === 'grid' ? <GridIcon /> : <ListIcon />}
             </button>
+            <div style={{ position: 'relative' }}>
+              <button className="btn" onClick={() => setViewOptionsOpen((o) => !o)} aria-label="View options" aria-expanded={viewOptionsOpen} title="View options"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><DotsIcon /></button>
+              <ViewOptions open={viewOptionsOpen} onClose={() => setViewOptionsOpen(false)} sort={sort} onSort={onSortPreset}
+                displaySize={displaySize} onDisplaySize={onDisplaySize} showHidden={showHidden} onShowHidden={onShowHidden} />
+            </div>
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', position: 'relative', '--icon-scale': iconScale } as React.CSSProperties} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
