@@ -46,6 +46,19 @@ describe('trash', () => {
     expect(await listTrash(root)).toEqual([]);
   });
 
+  it('uniquifies a trash path when a same-named item is already in the trash (no EISDIR)', async () => {
+    const privy = boot();
+    mkdirSync(join(privy, 'x'), { recursive: true }); // folder "x"
+    await trashPath(root, 'x'); // trash/x becomes a directory
+    writeFileSync(join(privy, 'x'), 'content'); // new FILE also named "x"
+    // Must not throw EISDIR — the file gets a uniquified trash path.
+    await expect(trashPath(root, 'x')).resolves.not.toThrow();
+    const items = await listTrash(root);
+    const x = items.filter((i) => i.name === 'x');
+    expect(x.length).toBe(2); // the folder and the file both trashed
+    expect(x.some((i) => !i.isDir)).toBe(true); // the file is not reported as a dir
+  });
+
   it('rejects paths that escape the trash dir', async () => {
     await expect(deleteTrashPath(root, '../../etc/passwd')).rejects.toThrow('unsafe path');
     await expect(trashPath(root, '../outside.txt')).rejects.toThrow();
