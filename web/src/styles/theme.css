@@ -498,6 +498,12 @@ button { font: inherit; cursor: pointer; }
    is text-only (files: "← Back") or carries an icon (chat: "Files") — otherwise the
    3px button-height difference shifts the content on toggle. */
 .mobile-subheader { display: flex; align-items: center; gap: 8px; padding: 6px 8px; min-height: 51px; background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+/* The subheader buttons must not inherit the inline-flex baseline quirk: an icon
+   span's baseline is its bottom edge, which pads the button's line box ~3px taller
+   than a text-only button. Making the button itself a flex container (align-items
+   center) drops baseline participation so both buttons are the same height and
+   toggle without shaking. */
+.mobile-subheader .btn { display: flex; align-items: center; }
 .mobile-subtitle { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
 /* Phone place row: the sidebar's virtual places + category folders as a
    horizontally scrollable chip rail above the grid. */
