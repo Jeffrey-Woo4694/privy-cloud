@@ -178,6 +178,13 @@ export function PrivyCloudTab() {
     enterLocation(history[historyIndex + 1]);
   };
 
+  // Phone file browser: the subheader "← Back" walks up the folder history, and
+  // only returns to the chat once you're back at the top (Home / root).
+  const backFromFiles = () => {
+    if (historyIndex > 0) goBack();
+    else setMobileFiles(false);
+  };
+
   // File-manager model: a single click SELECTS the tile; a double click opens it.
   // Shift+click selects the contiguous range from the last clicked tile (anchor).
   const handleTileSelect = (item: FileItem, shiftKey: boolean) => {
@@ -359,14 +366,16 @@ export function PrivyCloudTab() {
   );
 
   // The file browser (sidebar + path bar + grid) shared by the desktop left panel
-  // and the mobile "Shared files" view.
+  // and the mobile "Shared files" view. On the phone the desktop sidebar and the
+  // path bar are dropped so the grid gets the full width; "← Back" (backFromFiles)
+  // walks up the folder history instead.
   const filesLayout = (
     <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
-      <SharingSidebar location={loc} onSelect={navigate} />
+      {!isMobile && <SharingSidebar location={loc} onSelect={navigate} />}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-          <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
-            canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} mobile={isMobile} /></div>
+          {!isMobile && <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
+            canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} /></div>}
           <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
             <div className="trail" role="group" aria-label="view options">
               <button className="trail-btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
@@ -445,11 +454,14 @@ export function PrivyCloudTab() {
 
   if (isMobile) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      // .app-body is a row flex, so the mobile root must ask for the full width
+      // (the desktop root does `width:100%` too); otherwise the file grid resolves
+      // to a single column squeezed to the left of the viewport.
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
         {mobileFiles ? (
           <>
             <div className="mobile-subheader">
-              <button className="btn" onClick={() => setMobileFiles(false)} aria-label="back to chat">← Back</button>
+              <button className="btn" onClick={backFromFiles} aria-label="back to chat">← Back</button>
               <span style={{ flex: 1 }} />
               <span className="mobile-subtitle">Shared files</span>
             </div>

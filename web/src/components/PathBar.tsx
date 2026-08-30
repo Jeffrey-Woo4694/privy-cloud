@@ -4,18 +4,14 @@ import { pathSegments, type Location } from '../sharingLocation';
 //   1. the back/forward nav group (‹ › joined in one rounded container), and
 //   2. the breadcrumb "field": ancestor directories are clickable crumbs, while
 //      the directory you're currently in is shown as emphasised, non-clickable text.
-export function PathBar({ location, onNavigate, onBack, onForward, canGoBack, canGoForward, mobile = false }: {
+export function PathBar({ location, onNavigate, onBack, onForward, canGoBack, canGoForward }: {
   location: Location;
   onNavigate: (loc: Location) => void;
   onBack: () => void;
   onForward: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
-  // On the phone the sharing view has its own "← Back" button and the sidebar for
-  // navigation, so the whole path bar (back/forward nav + breadcrumb field) is dropped.
-  mobile?: boolean;
 }) {
-  if (mobile) return null;
   const segments = pathSegments(location);
   const crumbs = segments.slice(0, -1); // ancestor directories — clickable
   const current = segments[segments.length - 1]; // where you are now — reads, not a button

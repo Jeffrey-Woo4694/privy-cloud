@@ -42,14 +42,4 @@ describe('PathBar', () => {
     fireEvent.click(screen.getByLabelText('forward'));
     expect(base.onForward).toHaveBeenCalled();
   });
-
-  it('mobile renders no path bar at all (nav group and breadcrumb field)', () => {
-    render(<PathBar location={{ type: 'folder', path: 'Images/sub' } as const}
-      onNavigate={vi.fn()} onBack={vi.fn()} onForward={vi.fn()} canGoBack canGoForward={false} mobile />);
-    expect(document.querySelector('.path-bar')).toBeNull();
-    expect(screen.queryByLabelText('back')).toBeNull();
-    expect(screen.queryByLabelText('forward')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Home' })).toBeNull();
-    expect(screen.queryByText('sub')).toBeNull();
-  });
 });
