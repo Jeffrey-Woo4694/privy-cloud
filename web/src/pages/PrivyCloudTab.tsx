@@ -17,7 +17,16 @@ import { sortItems, nextSort, type Sort, type SortKey } from '../sortItems';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { usePrivyHermes } from '../hermes/usePrivyHermes';
-import { itemsForLocation, locationKey, type Location } from '../sharingLocation';
+import { CATEGORY_PLACES, itemsForLocation, locationKey, type Location, type Place } from '../sharingLocation';
+
+// The virtual places (sidebar's first group) + the category folders, shown as a
+// horizontal, scrollable place row on the phone where the desktop sidebar is hidden.
+const MOBILE_PLACES: Place[] = [
+  { id: 'Home', label: 'Home', icon: 'home', location: { type: 'home' } as Location },
+  { id: 'Recent', label: 'Recent', icon: 'recent', location: { type: 'recent' } as Location },
+  { id: 'Trash', label: 'Trash', icon: 'trash', location: { type: 'trash' } as Location },
+  ...CATEGORY_PLACES,
+];
 import { ContextMenu } from '../components/ContextMenu';
 import { buildMenu, type MenuAction, type MenuContext } from '../contextMenu';
 
@@ -373,6 +382,16 @@ export function PrivyCloudTab() {
     <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
       {!isMobile && <SharingSidebar location={loc} onSelect={navigate} />}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        {isMobile && (
+          <div className="mobile-places" role="navigation" aria-label="places">
+            {MOBILE_PLACES.map((p) => (
+              <button key={p.id} className={`place-chip${locationKey(p.location) === locationKey(loc) ? ' active' : ''}`}
+                onClick={() => navigate(p.location)}>
+                <span className="place-chip-icon"><ShapeIcon name={p.icon} size={15} /></span>{p.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
           {!isMobile && <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
             canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} /></div>}

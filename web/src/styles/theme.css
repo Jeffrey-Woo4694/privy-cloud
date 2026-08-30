@@ -496,3 +496,12 @@ button { font: inherit; cursor: pointer; }
 /* Mobile sub-header inside a tab (chat ← → browse files / sessions toggle). */
 .mobile-subheader { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--panel); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .mobile-subtitle { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+/* Phone place row: the sidebar's virtual places + category folders as a
+   horizontally scrollable chip rail above the grid. */
+.mobile-places { display: flex; gap: 8px; overflow-x: auto; padding: 4px 8px 8px; flex-shrink: 0; scrollbar-width: none; }
+.mobile-places::-webkit-scrollbar { display: none; }
+.place-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--glass-border); background: var(--chipbg); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background .15s; }
+.place-chip:hover { background: var(--panel2); color: var(--accent); }
+.place-chip.active { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+.place-chip-icon { width: 15px; height: 15px; display: flex; align-items: center; justify-content: center; }
+.place-chip-icon svg { width: 100%; height: 100%; }
