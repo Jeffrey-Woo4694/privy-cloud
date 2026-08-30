@@ -127,6 +127,17 @@ button { font: inherit; cursor: pointer; }
 .vo-radio.on, .vo-check.on { color: var(--accent); }
 .vo-sep { border-top: 1px solid var(--border); margin: 4px 0; }
 
+/* Create-folder/file modal (New Folder / New File). */
+.dialog-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.create-dialog { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: 320px; max-width: 90vw; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4); }
+.create-dialog-head { position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.create-dialog-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.create-dialog-close { position: absolute; right: 0; top: 0; background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px; }
+.create-dialog-close:hover { color: var(--danger); }
+.create-dialog-input { width: 100%; box-sizing: border-box; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 10px 12px; outline: none; margin-bottom: 16px; }
+.create-dialog-input:focus { border-color: var(--accent); }
+.create-dialog-actions { display: flex; justify-content: center; }
+
 /* List view of the sharing grid (Name | Size | Modified, sortable). Rows are
    generous so a line is an easy click/select target; hover highlights the row. */
 .list-table { width: 100%; border-collapse: collapse; font-size: 13px; }

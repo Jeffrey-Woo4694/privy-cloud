@@ -9,6 +9,7 @@ import { SharingSidebar } from '../components/SharingSidebar';
 import { PathBar } from '../components/PathBar';
 import { SharingGrid } from '../components/SharingGrid';
 import { ListView } from '../components/ListView';
+import { CreateDialog, type CreateKind } from '../components/CreateDialog';
 import { ViewOptions, type DisplaySize } from '../components/ViewOptions';
 import { GridIcon, ListIcon, DotsIcon } from '../components/icons';
 import { sortItems, nextSort, type Sort, type SortKey } from '../sortItems';
@@ -38,8 +39,7 @@ export function PrivyCloudTab() {
   const [mobileFiles, setMobileFiles] = useState(false);
   const [error, setError] = useState('');
   const [rootDir, setRootDir] = useState('');
-  const [creating, setCreating] = useState<null | 'folder' | 'file'>(null);
-  const [newName, setNewName] = useState('');
+  const [createDialog, setCreateDialog] = useState<CreateKind | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; ctx: MenuContext } | null>(null);
   const [renaming, setRenaming] = useState<FileItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TrashItem | null>(null);
@@ -139,7 +139,7 @@ export function PrivyCloudTab() {
   // Navigate to a location (sidebar, breadcrumb, or folder tile); refresh trash when entering it.
   const navigate = (newLoc: Location) => {
     setLoc(newLoc);
-    setCreating(null); setNewName(''); // never carry an open create dialog into a new location
+    setCreateDialog(null); // never carry an open create dialog into a new location
     setSelection(new Set()); // entering a new directory clears the grid selection (clipboard persists)
     setRangeAnchor(null);
     if (newLoc.type === 'trash') refreshTrash();
@@ -216,7 +216,7 @@ export function PrivyCloudTab() {
     keyRef.current = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (menu || creating || renaming || confirmDelete) return;
+      if (menu || createDialog || renaming || confirmDelete) return;
       if (selected) return; // a file viewer is open — grid shortcuts are off
       if (!canOperate) return; // recent/trash — no file-system operations
       const sels = viewItems.filter((i) => selection.has(i.path));
@@ -254,13 +254,13 @@ export function PrivyCloudTab() {
 
   const canCreate = loc.type === 'home' || loc.type === 'folder';
   const parentRel = loc.type === 'folder' ? loc.path : '';
-  const confirmCreate = async () => {
-    const name = newName.trim();
-    if (!name) return;
+  const confirmCreate = async (kind: CreateKind, name: string) => {
+    const v = name.trim();
+    if (!v) return;
     try {
-      if (creating === 'folder') await api.createFolder(parentRel, name);
-      else await api.createFile(parentRel, name, '');
-      setCreating(null); setNewName('');
+      if (kind === 'folder') await api.createFolder(parentRel, v);
+      else await api.createFile(parentRel, v, '');
+      setCreateDialog(null);
       void refresh();
     } catch (e) { setError((e as Error).message); }
   };
@@ -275,8 +275,8 @@ export function PrivyCloudTab() {
 
   const handleMenuAction = async (action: MenuAction, ctx: MenuContext) => {
     closeMenu();
-    if (action === 'new-folder') { setCreating('folder'); setNewName(''); return; }
-    if (action === 'new-file') { setCreating('file'); setNewName(''); return; }
+    if (action === 'new-folder') { setCreateDialog('folder'); return; }
+    if (action === 'new-file') { setCreateDialog('file'); return; }
     if (ctx.kind === 'trash') {
       const t = ctx.item;
       if (action === 'restore') { await restoreItem(t.path); return; }
@@ -338,21 +338,11 @@ export function PrivyCloudTab() {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} canGoBack={loc.type === 'folder'} /></div>
-          {canCreate && creating === null && (
+          {canCreate && (
             <>
-              <button className="btn" onClick={() => { setCreating('folder'); setNewName(''); }}>+ Folder</button>
-              <button className="btn" onClick={() => { setCreating('file'); setNewName(''); }}>+ File</button>
+              <button className="btn" onClick={() => setCreateDialog('folder')}>+ Folder</button>
+              <button className="btn" onClick={() => setCreateDialog('file')}>+ File</button>
             </>
-          )}
-          {canCreate && creating !== null && (
-            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') void confirmCreate(); if (e.key === 'Escape') { setCreating(null); setNewName(''); } }}
-                placeholder={creating === 'folder' ? 'Folder name' : 'File name'}
-                style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #3a3a3a', background: '#1a1a1a', color: 'inherit', minWidth: 140 }} />
-              <button className="btn btn-primary" onClick={() => void confirmCreate()}>Create</button>
-              <button className="btn" onClick={() => { setCreating(null); setNewName(''); }}>Cancel</button>
-            </span>
           )}
           <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
@@ -418,6 +408,7 @@ export function PrivyCloudTab() {
         </div>
         {!isMobile && rightPanel}
         {error && <div className="toast">{error}</div>}
+        {createDialog && <CreateDialog kind={createDialog} onConfirm={(n) => void confirmCreate(createDialog, n)} onCancel={() => setCreateDialog(null)} />}
       </div>
     );
   }
@@ -467,6 +458,7 @@ export function PrivyCloudTab() {
             </div>
           </div>
         )}
+        {createDialog && <CreateDialog kind={createDialog} onConfirm={(n) => void confirmCreate(createDialog, n)} onCancel={() => setCreateDialog(null)} />}
       </div>
     );
   }
@@ -495,6 +487,7 @@ export function PrivyCloudTab() {
           </div>
         </div>
       )}
+      {createDialog && <CreateDialog kind={createDialog} onConfirm={(n) => void confirmCreate(createDialog, n)} onCancel={() => setCreateDialog(null)} />}
     </div>
   );
 }
