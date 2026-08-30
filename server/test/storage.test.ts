@@ -114,7 +114,7 @@ describe('create', () => {
   it('create rejects unsafe names', async () => {
     root = mkdtempSync(join(tmpdir(), 'privy-'));
     await initRootStructure(root);
-    for (const bad of ['../evil', '.hidden', 'a/b', 'a\\b', '..', '']) {
+    for (const bad of ['../evil', '.privy', 'a/b', 'a\\b', '..', '']) {
       await expect(createDirectory(root, '', bad)).rejects.toMatchObject({ code: 'INVALID_NAME' });
     }
   });
@@ -175,7 +175,7 @@ it('renameItem rejects invalid names, missing items, and conflicts', async () =>
   await initRootStructure(root);
   await createFile(root, '', 'a.txt', Buffer.from('a'));
   await expect(renameItem(root, 'a.txt', '../evil')).rejects.toMatchObject({ code: 'INVALID_NAME' });
-  await expect(renameItem(root, 'a.txt', '.hidden')).rejects.toMatchObject({ code: 'INVALID_NAME' });
+  await expect(renameItem(root, 'a.txt', '.privy')).rejects.toMatchObject({ code: 'INVALID_NAME' });
   await expect(renameItem(root, 'missing.txt', 'b.txt')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   await createFile(root, '', 'b.txt', Buffer.from('b'));
   await expect(renameItem(root, 'a.txt', 'b.txt')).rejects.toMatchObject({ code: 'EXISTS' });

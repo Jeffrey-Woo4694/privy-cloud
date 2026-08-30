@@ -389,7 +389,7 @@ describe('api', () => {
     const badKind = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'x', kind: 'garbage' }, headers: AUTH });
     expect(badKind.statusCode).toBe(400);
 
-    const hidden = await app.inject({ method: 'POST', url: '/api/items', payload: { name: '.secret', kind: 'folder' }, headers: AUTH });
+    const hidden = await app.inject({ method: 'POST', url: '/api/items', payload: { name: '.privy', kind: 'folder' }, headers: AUTH });
     expect(hidden.statusCode).toBe(400);
 
     const tooLong = await app.inject({ method: 'POST', url: '/api/items', payload: { name: 'x'.repeat(300), kind: 'folder' }, headers: AUTH });

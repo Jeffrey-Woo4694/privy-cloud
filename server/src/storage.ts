@@ -41,7 +41,7 @@ export function sanitizeSegment(name: string): string | null {
   const clean = name.trim();
   if (!clean) return null;
   if (clean === '.' || clean === '..') return null;
-  if (clean.startsWith('.')) return null; // hidden files are excluded from the view
+  if (clean === '.privy') return null; // the backend-internal dir is never a user item
   if (clean.includes('/') || clean.includes('\\') || clean.includes('\0')) return null;
   if (basename(clean) !== clean) return null;
   if (Buffer.byteLength(clean, 'utf8') > 255) return null; // ext4 caps a name at 255 bytes, not chars
@@ -88,9 +88,11 @@ export async function storeFolder(root: string, folderName: string, files: Array
   return appendEntry(root, { type: 'folder', kind: 'folder', name: folderName, path: base, sender: 'owner' });
 }
 
-/** Reject a path segment that could escape the vault (`..`) or hide a dotfile. */
+/** Reject a path segment that could escape the vault (`..`) or collide with the
+ *  backend-internal `.privy` directory. (Other dot-prefixed names are allowed now
+ *  that hidden files are viewable via the "Show Hidden Files" toggle.) */
 function badSegment(s: string): boolean {
-  return s.split(/[/\\]/).some((seg) => seg && (seg === '..' || seg.startsWith('.')));
+  return s.split(/[/\\]/).some((seg) => seg && (seg === '..' || seg === '.privy'));
 }
 
 /** A collision-free rel (relative to `Privy Cloud/`) for `name` inside `dirRel` (''=root). */

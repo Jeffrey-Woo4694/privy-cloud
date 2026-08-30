@@ -59,7 +59,6 @@ describe('uploadInto', () => {
     const tmp = tmpFile('X');
     await expect(uploadInto(root, 'Documents', [{ base: '..', rel: 'x.txt', tmpPath: tmp }])).rejects.toThrow();
     await expect(uploadInto(root, 'Documents', [{ base: '', rel: '../x.txt', tmpPath: tmp }])).rejects.toThrow();
-    await expect(uploadInto(root, 'Documents', [{ base: '.hidden', rel: 'x.txt', tmpPath: tmp }])).rejects.toThrow();
   });
 
   it('rejects writes into the backend-internal .privy area', async () => {

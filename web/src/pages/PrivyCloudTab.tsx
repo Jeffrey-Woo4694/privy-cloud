@@ -263,6 +263,8 @@ export function PrivyCloudTab() {
     try {
       if (kind === 'folder') await api.createFolder(parentRel, v);
       else await api.createFile(parentRel, v, '');
+      // A dot-prefixed item is hidden; turn on "Show Hidden Files" so it appears.
+      if (v.startsWith('.')) { showHiddenRef.current = true; setShowHidden(true); }
       setCreateDialog(null);
       void refresh();
     } catch (e) { setError((e as Error).message); }
