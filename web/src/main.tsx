@@ -10,6 +10,10 @@ import './styles/theme.css';
 // leave <html> alone — resizing the initial containing block is what broke the
 // layout before) so the app reshapes to the area above the keyboard: the top bar
 // stays put and the flex:1 history shrinks.
+//
+// Only the `resize` event is handled (not `scroll`): during the keyboard's opening
+// animation iOS fires many scroll events, and resetting the page on each one makes
+// the layout jitter. The resize event is the single "the keyboard is open" signal.
 function fitVisualViewport() {
   const vv = window.visualViewport;
   if (!vv) return;
@@ -17,7 +21,6 @@ function fitVisualViewport() {
   window.scrollTo(0, 0); // undo any iOS auto-scroll toward the focused input
 }
 window.visualViewport?.addEventListener('resize', fitVisualViewport);
-window.visualViewport?.addEventListener('scroll', fitVisualViewport);
 fitVisualViewport();
 
 createRoot(document.getElementById('root')!).render(
