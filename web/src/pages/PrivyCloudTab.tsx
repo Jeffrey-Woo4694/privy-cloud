@@ -395,7 +395,7 @@ export function PrivyCloudTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
           {!isMobile && <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
             canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} /></div>}
-          <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
             <div className="trail" role="group" aria-label="view options">
               <button className="trail-btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
                 title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
