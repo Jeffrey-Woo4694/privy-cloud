@@ -4,3 +4,8 @@ dist/
 target/
 .playwright-mcp/
 .claude/settings.local.json
+
+# Design-iteration / e2e screenshots kept in the repo root — not part of the source.
+/privy-*.png
+/e2e-*.png
+/editor-modal-state.png

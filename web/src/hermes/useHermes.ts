@@ -22,10 +22,18 @@ import {
   pushUser,
   removeAttachment as removeAttachmentReducer,
   resyncMessages,
+  stallTurn,
   takeAttachments,
   undoLastTurn,
 } from './reducer';
 import type { AgentEvent, HermesState, ResyncItem } from './types';
+
+/// How long a streaming turn may produce NO agent event (with no tool running)
+/// before the watchdog flags it as stalled. Hermes normally streams deltas/tool/
+/// thinking events constantly, so total silence this long with no active tool is
+/// a strong provider hang signal — e.g. a 429 that makes the gateway retry
+/// silently. Generous enough not to interrupt the odd long, silent tool run.
+const HERMES_STALL_MS = 180_000;
 
 interface SessionCreated {
   session_id?: string;
@@ -128,6 +136,32 @@ export function useHermes(): {
   // durable key. The initial connect (no prior disconnect) is skipped.
   const everDisconnectedRef = useRef(false);
 
+  // Timestamp of the last agent event from the gateway. The stall watchdog
+  // (below) uses this: if a turn is streaming but the gateway goes quiet for a
+  // long window with no tool running, the provider has likely stalled (e.g. a
+  // 429 that makes Hermes retry silently for minutes), and the tab would spin
+  // forever — so we surface an error instead. Updated on every inbound event
+  // and on submit.
+  const lastActivityRef = useRef(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const s = stateRef.current;
+      if (!s.streaming) return;
+      // A running tool is legitimate work — don't call it a stall (a long bash
+      // compile can be silent for minutes while `tool.complete` is delayed).
+      const toolRunning = s.messages.some((m) => m.tools.some((t) => t.state === 'running'));
+      if (toolRunning) return;
+      const idle = Date.now() - lastActivityRef.current;
+      if (idle < HERMES_STALL_MS) return;
+      const secs = Math.round(HERMES_STALL_MS / 1000);
+      setState((prev) =>
+        stallTurn(prev, `⚠️ No response from Hermes for ${secs}s — the model backend may be unavailable. Press Stop to cancel; resend once it recovers.`)
+      );
+    }, 5_000);
+    return () => clearInterval(id);
+  }, []);
+
   const refreshSessions = useCallback(() => {
     api
       .hermesCall('session.list', { limit: 200 })
@@ -140,6 +174,8 @@ export function useHermes(): {
   useEffect(() => {
     const disconnect = connect({
       onHermesEvent: (e) => {
+        // Any inbound event is progress — re-arm the stall watchdog.
+        lastActivityRef.current = Date.now();
         // `hermes:status` is a ServerEvent frame the relay forwards as its own
         // pseudo-event (see ws.ts); it is NOT part of the AgentEvent union, so
         // probe it as a loose shape rather than intersecting with AgentEvent.
@@ -206,6 +242,7 @@ export function useHermes(): {
     if (!sessionId) return false;
     const trimmed = text.trim();
     if (!trimmed) return false;
+    lastActivityRef.current = Date.now();
 
     // Slash command: route to `slash.exec` and surface its output as an
     // assistant message, instead of submitting a normal prompt.

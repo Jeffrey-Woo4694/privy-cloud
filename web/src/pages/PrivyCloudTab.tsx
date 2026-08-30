@@ -10,13 +10,14 @@ import { PathBar } from '../components/PathBar';
 import { SharingGrid } from '../components/SharingGrid';
 import { ListView } from '../components/ListView';
 import { CreateDialog, type CreateKind } from '../components/CreateDialog';
+import { CreateMenu } from '../components/CreateMenu';
 import { ViewOptions, type DisplaySize } from '../components/ViewOptions';
-import { GridIcon, ListIcon, DotsIcon } from '../components/icons';
+import { GridIcon, ListIcon, DotsIcon, ShapeIcon } from '../components/icons';
 import { sortItems, nextSort, type Sort, type SortKey } from '../sortItems';
 import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { usePrivyHermes } from '../hermes/usePrivyHermes';
-import { itemsForLocation, type Location } from '../sharingLocation';
+import { itemsForLocation, locationKey, type Location } from '../sharingLocation';
 import { ContextMenu } from '../components/ContextMenu';
 import { buildMenu, type MenuAction, type MenuContext } from '../contextMenu';
 
@@ -31,6 +32,11 @@ export function PrivyCloudTab() {
   const [items, setItems] = useState<FileItem[]>([]);
   const [chat, setChat] = useState<ChatEntry[]>([]);
   const [loc, setLoc] = useState<Location>({ type: 'home' });
+  // Browser-style back/forward: a stack of visited locations plus the index we're
+  // showing. Navigating to a new place pushes (dropping any forward tail); ‹ / ›
+  // move the index so you can revisit where you've been. Initialised with Home.
+  const [history, setHistory] = useState<Location[]>([{ type: 'home' }]);
+  const [historyIndex, setHistoryIndex] = useState(0);
   const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
   const [selected, setSelected] = useState<FileItem | null>(null);
   // On mobile the Sharing/Hermes chat fills the screen; the file browser is a
@@ -57,6 +63,7 @@ export function PrivyCloudTab() {
   useEffect(() => { localStorage.setItem('privy-sort', JSON.stringify(sort)); }, [sort]);
   // View options: icon size, show hidden files, and the popover open state.
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [displaySize, setDisplaySize] = useState<DisplaySize>(() => (localStorage.getItem('privy-display-size') as DisplaySize) || 'medium');
   const [showHidden, setShowHidden] = useState(() => localStorage.getItem('privy-show-hidden') === '1');
   useEffect(() => { localStorage.setItem('privy-display-size', displaySize); }, [displaySize]);
@@ -139,13 +146,36 @@ export function PrivyCloudTab() {
     await Promise.all([api.listItems(undefined, showHiddenRef.current).then(setItems), api.listChat().then((e) => setChat(chronological(e)))]);
   };
 
-  // Navigate to a location (sidebar, breadcrumb, or folder tile); refresh trash when entering it.
-  const navigate = (newLoc: Location) => {
+  // Enter a location: the shared bookkeeping that navigation and back/forward both
+  // need (clear any open dialog + selection, refresh the trash list when entering it).
+  const enterLocation = (newLoc: Location) => {
     setLoc(newLoc);
     setCreateDialog(null); // never carry an open create dialog into a new location
     setSelection(new Set()); // entering a new directory clears the grid selection (clipboard persists)
     setRangeAnchor(null);
     if (newLoc.type === 'trash') refreshTrash();
+  };
+
+  // Navigate to a location (sidebar, breadcrumb, or folder tile); push it onto the
+  // history stack (a fresh branch discards any forward entries).
+  const navigate = (newLoc: Location) => {
+    if (locationKey(newLoc) === locationKey(loc)) return; // already here — no history entry
+    enterLocation(newLoc);
+    const next = [...history.slice(0, historyIndex + 1), newLoc];
+    setHistory(next);
+    setHistoryIndex(next.length - 1);
+  };
+
+  const goBack = () => {
+    if (historyIndex <= 0) return;
+    setHistoryIndex(historyIndex - 1);
+    enterLocation(history[historyIndex - 1]);
+  };
+
+  const goForward = () => {
+    if (historyIndex >= history.length - 1) return;
+    setHistoryIndex(historyIndex + 1);
+    enterLocation(history[historyIndex + 1]);
   };
 
   // File-manager model: a single click SELECTS the tile; a double click opens it.
@@ -169,13 +199,6 @@ export function PrivyCloudTab() {
     setRangeAnchor(null);
     if (item.isDir) navigate({ type: 'folder', path: item.path });
     else setSelected(item);
-  };
-
-  const goBack = () => {
-    if (loc.type !== 'folder') return;
-    const parts = loc.path.split('/');
-    parts.pop();
-    navigate(parts.length === 0 ? { type: 'home' } : { type: 'folder', path: parts.join('/') });
   };
 
   const trashPaths = async (items: FileItem[]) => {
@@ -338,30 +361,35 @@ export function PrivyCloudTab() {
   // The file browser (sidebar + path bar + grid) shared by the desktop left panel
   // and the mobile "Shared files" view.
   const filesLayout = (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
       <SharingSidebar location={loc} onSelect={navigate} />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} canGoBack={loc.type === 'folder'} /></div>
-          {canCreate && (
-            <>
-              <button className="btn" onClick={() => setCreateDialog('folder')}>+ Folder</button>
-              <button className="btn" onClick={() => setCreateDialog('file')}>+ File</button>
-            </>
-          )}
-          <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-            <button className="btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
-              title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-              aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-              {viewMode === 'grid' ? <GridIcon /> : <ListIcon />}
-            </button>
-            <div style={{ position: 'relative' }}>
-              <button className="btn" onClick={() => setViewOptionsOpen((o) => !o)} aria-label="View options" aria-expanded={viewOptionsOpen} title="View options"
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}><PathBar location={loc} onNavigate={navigate} onBack={goBack} onForward={goForward}
+            canGoBack={historyIndex > 0} canGoForward={historyIndex < history.length - 1} mobile={isMobile} /></div>
+          <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+            <div className="trail" role="group" aria-label="view options">
+              <button className="trail-btn" onClick={() => setViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
+                title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+                aria-label={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {viewMode === 'grid' ? <GridIcon /> : <ListIcon />}
+              </button>
+              <span className="trail-div" aria-hidden="true" />
+              <button className="trail-btn" onClick={() => setViewOptionsOpen((o) => !o)} aria-label="View options" aria-expanded={viewOptionsOpen} title="View options"
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><DotsIcon /></button>
               <ViewOptions open={viewOptionsOpen} onClose={() => setViewOptionsOpen(false)} sort={sort} onSort={onSortPreset}
                 displaySize={displaySize} onDisplaySize={onDisplaySize} showHidden={showHidden} onShowHidden={onShowHidden} />
             </div>
+            {canCreate && (
+              <div style={{ position: 'relative' }}>
+                <button className="btn" onClick={() => setCreateOpen((o) => !o)} aria-label="Create" aria-expanded={createOpen} title="Create"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999, padding: '6px 12px' }}>
+                  <ShapeIcon name="chevronDown" size={16} />
+                </button>
+                <CreateMenu open={createOpen} onClose={() => setCreateOpen(false)} onPick={(kind) => { setCreateOpen(false); setCreateDialog(kind); }} />
+              </div>
+            )}
           </div>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', position: 'relative', '--icon-scale': iconScale } as React.CSSProperties} onContextMenu={(e) => openMenu(e, { kind: 'background', canCreate })}
@@ -372,7 +400,8 @@ export function PrivyCloudTab() {
               {trashItems.length === 0 && <div className="empty-state">Trash is empty.</div>}
               {trashItems.map((t) => (
                 <div key={t.path} className="trash-row" onContextMenu={(e) => openMenu(e, { kind: 'trash', item: t })}>
-                  <span>{t.isDir ? '📁' : '📄'} {t.path}</span>
+                  <span className="trash-icon"><ShapeIcon name={t.isDir ? 'folder' : 'document'} size={15} /></span>
+                  <span>{t.path}</span>
                   <span style={{ flex: 1 }} />
                   <button className="btn" onClick={() => restoreItem(t.path)}>Restore</button>
                   <button className="btn" onClick={() => setConfirmDelete(t)}>Delete forever</button>
@@ -401,10 +430,6 @@ export function PrivyCloudTab() {
     </div>
   );
 
-  const statusText = loc.type === 'trash'
-    ? `${trashItems.length} item${trashItems.length === 1 ? '' : 's'} in trash`
-    : `${viewItems.length} item${viewItems.length === 1 ? '' : 's'}`;
-
   if (selected) {
     return (
       <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%', height: '100%', minWidth: 0 }}>
@@ -430,13 +455,14 @@ export function PrivyCloudTab() {
             </div>
             <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               {filesLayout}
-              <div className="status-bar">{statusText}</div>
             </div>
           </>
         ) : (
           <>
             <div className="mobile-subheader">
-              <button className="btn" onClick={() => setMobileFiles(true)} aria-label="browse files">📁 Files</button>
+              <button className="btn" onClick={() => setMobileFiles(true)} aria-label="browse files">
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><ShapeIcon name="folder" size={15} /> Files</span>
+              </button>
               <span style={{ flex: 1 }} />
               <span className="mobile-subtitle">Sharing & Hermes</span>
             </div>
@@ -472,7 +498,6 @@ export function PrivyCloudTab() {
     <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%', height: '100%', minWidth: 0 }}>
       <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {filesLayout}
-        <div className="status-bar">{statusText}</div>
       </div>
       {rightPanel}
       {error && <div className="toast">{error}</div>}

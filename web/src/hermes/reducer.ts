@@ -243,6 +243,23 @@ function finalizeMessage(msg: Message, state: HermesState): Message {
   return { ...msg, subagents: state.subagents.slice() };
 }
 
+/// Surface a stalled turn to the user. When the gateway is connected but a turn
+/// produces no progress for a long window (e.g. the model provider rejects every
+/// request with a 429, so the gateway retries silently and never emits
+/// `message.complete`/`error`), the tab would spin forever. This marks the open
+/// streaming message as finished/errored with `text` and stops streaming, so the
+/// failure is visible instead of an indefinite spinner. The gateway turn is NOT
+/// interrupted — this only updates the local view; the user can still press Stop
+/// to cancel.
+export function stallTurn(state: HermesState, text: string): HermesState {
+  const idx = findLastIndex(state.messages, (m) => m.streaming);
+  if (idx === -1) return { ...state, streaming: false, status: text };
+  const messages = state.messages.map((m, i) =>
+    i === idx ? finalizeMessage({ ...m, text, streaming: false, complete: true }, state) : m
+  );
+  return { ...state, messages, streaming: false, status: text };
+}
+
 export function applyAgentEvent(state: HermesState, event: AgentEvent): HermesState {
   switch (event.type) {
     case 'message.start': {

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MenuAction, MenuItem } from '../contextMenu';
+import { ShapeIcon } from './icons';
 
 export function ContextMenu({ x, y, items, onSelect, onClose }: {
   x: number; y: number; items: MenuItem[]; onSelect(action: MenuAction): void; onClose(): void;
@@ -45,7 +46,7 @@ export function ContextMenu({ x, y, items, onSelect, onClose }: {
           <div role="menuitem" aria-disabled={item.disabled || undefined}
             className={`ctx-menu-item${item.danger ? ' danger' : ''}`}
             onClick={item.disabled ? undefined : () => { onSelect(item.action); onClose(); }}>
-            {item.icon && <span className="ctx-menu-icon">{item.icon}</span>}
+            {item.icon && <span className="ctx-menu-icon"><ShapeIcon name={item.icon} size={14} /></span>}
             <span className="ctx-menu-label">{item.label}</span>
           </div>
         </Fragment>

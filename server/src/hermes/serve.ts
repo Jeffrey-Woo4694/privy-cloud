@@ -29,19 +29,33 @@ export function getHermesHome(): string {
   return HERMES_HOME;
 }
 
-/// Provision the isolated home: create the dir and seed `config.yaml` + `.env`
-/// from the standard `~/.hermes` when the isolated copies don't exist yet, so a
-/// fresh setup has a working model/provider config. Best-effort — a failure
-/// (R3) must never break the backend; hermes simply won't start until it's fixed.
+/// Provision the isolated home and keep its provider/model config in sync with
+/// the standard `~/.hermes`. `config.yaml` is re-copied on EVERY spawn (not just
+/// first use), so a provider or default-model change made in the local Hermes
+/// app (e.g. `hermes model`, or editing `~/.hermes/config.yaml`) automatically
+/// propagates to THIS gateway on its next start/reconnect. A one-time seed
+/// alone leaves the isolated copy stuck on whatever provider/model was current
+/// when it was first created — which is exactly what stranded the gateway on an
+/// exhausted `opencode-go-copy` while `~/.hermes` had moved to `opencode-go`.
+///
+/// Trade-off: a provider/model switch made via this app's model picker with
+/// `--global` scope writes the isolated `config.yaml` and is reverted on the
+/// next reconnect (the local `~/.hermes` wins). Session-scoped switches don't
+/// touch the file, so they're unaffected. `.env` keeps the if-missing rule: it
+/// holds provider secrets Hermes may rewrite at runtime, which we don't clobber.
+///
+/// Best-effort — a failure (R3) must never break the backend; hermes simply
+/// won't start until it's fixed.
 function ensureHermesHome(): void {
   try {
     mkdirSync(HERMES_HOME, { recursive: true });
     const srcHome = join(homedir(), '.hermes');
-    for (const f of ['config.yaml', '.env']) {
-      const src = join(srcHome, f);
-      const dst = join(HERMES_HOME, f);
-      if (!existsSync(dst) && existsSync(src)) copyFileSync(src, dst);
-    }
+    const srcConfig = join(srcHome, 'config.yaml');
+    const dstConfig = join(HERMES_HOME, 'config.yaml');
+    if (existsSync(srcConfig)) copyFileSync(srcConfig, dstConfig);
+    const srcEnv = join(srcHome, '.env');
+    const dstEnv = join(HERMES_HOME, '.env');
+    if (!existsSync(dstEnv) && existsSync(srcEnv)) copyFileSync(srcEnv, dstEnv);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[hermes] failed to provision isolated HERMES_HOME:', err instanceof Error ? err.message : String(err));

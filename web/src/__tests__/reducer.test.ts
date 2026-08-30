@@ -9,6 +9,7 @@ import {
   pushUser,
   removeAttachment,
   resyncMessages,
+  stallTurn,
   takeAttachments,
   undoLastTurn,
 } from '../hermes/reducer';
@@ -567,6 +568,35 @@ describe('agent-event reducer', () => {
     s = startTurn(s);
     const after = applyAgentEvent(s, { type: 'tool.complete', id: 'ghost', name: 'x', ok: true });
     expect(after).toBe(s);
+  });
+
+  it('stallTurn marks the streaming message errored and stops streaming', () => {
+    let s = initialHermesState();
+    s = pushUser(s, 'q');
+    s = startTurn(s);
+    const orig = s.messages[s.messages.length - 1];
+    const out = stallTurn(s, '⚠️ No response from Hermes for 180s');
+
+    const last = out.messages[out.messages.length - 1];
+    expect(last.role).toBe('assistant');
+    expect(last.text).toBe('⚠️ No response from Hermes for 180s');
+    expect(last.streaming).toBe(false);
+    expect(last.complete).toBe(true);
+    expect(out.streaming).toBe(false);
+    expect(out.status).toBe('⚠️ No response from Hermes for 180s');
+    // Immutable: the original streaming message is untouched.
+    expect(orig.streaming).toBe(true);
+    expect(orig.complete).toBe(false);
+  });
+
+  it('stallTurn with no streaming message only flips streaming/status', () => {
+    const s = pushUser(initialHermesState(), 'q');
+    const before = s.messages;
+    const after = stallTurn(s, '⚠️ stalled');
+
+    expect(after.messages).toBe(before);
+    expect(after.streaming).toBe(false);
+    expect(after.status).toBe('⚠️ stalled');
   });
 
   it('resyncMessages preserves sessionId/sessionKey/title and clears transient state', () => {

@@ -7,6 +7,8 @@ import { CodingAgentTab } from './pages/CodingAgentTab';
 import { PrivyCloudTab } from './pages/PrivyCloudTab';
 import { getToken, setToken, clearToken } from './auth';
 import { api } from './api';
+import { useIdleScroll } from './useIdleScroll';
+import { TaiChiIcon } from './components/icons';
 
 type Tab = 'hermes' | 'coding' | 'privy';
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -51,10 +53,10 @@ function Shell({ onLogout }: { onLogout(): void }) {
         <div className={`mobile-content${drawerOpen ? ' open' : ''}`}>
           <div className="mobile-topbar">
             <button className="btn mobile-menu" aria-label="menu" onClick={() => setDrawerOpen((v) => !v)}>☰</button>
+            <button className="icon-btn" onClick={toggle} aria-label="toggle theme" title="Toggle theme"><TaiChiIcon /></button>
             <span className="mobile-title">{label(tab)}</span>
             <span style={{ flex: 1 }} />
-            <button className="tab" onClick={toggle} aria-label="toggle theme">{theme === 'dark' ? '🌙' : '☀️'}</button>
-            <button className="tab" onClick={onLogout} aria-label="logout">Logout</button>
+            <button className="ghost-btn" onClick={onLogout} aria-label="logout">Logout</button>
           </div>
           {body}
         </div>
@@ -76,12 +78,17 @@ function Shell({ onLogout }: { onLogout(): void }) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="tab-bar">
-        {TABS.map((t) => (
-          <button key={t.key} className={`tab${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
-        ))}
-        <span className="tab-spacer" />
-        <button className="tab" onClick={toggle} aria-label="toggle theme">{theme === 'dark' ? '🌙' : '☀️'}</button>
-        <button className="tab" onClick={onLogout} aria-label="logout">Logout</button>
+        <div className="tab-left">
+          <button className="icon-btn" onClick={toggle} aria-label="toggle theme" title="Toggle theme"><TaiChiIcon /></button>
+        </div>
+        <div className="seg">
+          {TABS.map((t) => (
+            <button key={t.key} className={`tab${tab === t.key ? ' active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
+          ))}
+        </div>
+        <div className="tab-right">
+          <button className="ghost-btn" onClick={onLogout} aria-label="logout">Logout</button>
+        </div>
       </div>
       {body}
     </div>
@@ -91,6 +98,7 @@ function Shell({ onLogout }: { onLogout(): void }) {
 type AuthState = 'checking' | 'authenticated' | 'unauthenticated';
 
 export function App() {
+  useIdleScroll();
   // A stored token is validated against the server on load, so a stale/revoked
   // token (e.g. after a token change on another device) drops back to the gate
   // instead of opening a UI whose every request 401s.

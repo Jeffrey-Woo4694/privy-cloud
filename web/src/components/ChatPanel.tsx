@@ -1,19 +1,18 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { KINDS, type ChatEntry, type Kind } from '@privy/shared';
+import type { ChatEntry } from '@privy/shared';
 import type { PrivyBotMessage } from '../hermes/usePrivyHermes';
 import { Markdown } from './Markdown';
 import { api } from '../api';
 import { useFileDrop } from '../useFileDrop';
 import type { DropItem } from '../dropPayload';
 import { partitionDrop } from '../dropPayload';
-
-const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
+import { ShapeIcon, KIND_ICON } from './icons';
 
 interface HermesRole { id: string; label: string }
 const DEFAULT_ROLES: HermesRole[] = [{ id: 'hermes', label: 'Hermes' }];
 
 function Entry({ entry, onOpenFile }: { entry: ChatEntry; onOpenFile: (p: string) => void }) {
-  const icon = entry.kind === 'text' ? '✏️' : ICON[entry.kind] ?? '📦';
+  const icon = entry.kind === 'text' ? 'text' : KIND_ICON[entry.kind] ?? 'other';
   // A chat text entry is backed by a Markdown file (storeText writes it), so it is
   // clickable too — clicking opens that stored file in the sharing viewer.
   const body = entry.kind === 'text'
@@ -21,7 +20,7 @@ function Entry({ entry, onOpenFile }: { entry: ChatEntry; onOpenFile: (p: string
     : <span className="chat-fname" onClick={() => onOpenFile(entry.path!)}>{entry.name}</span>;
   return (
     <div className="chat-entry">
-      <div className="chat-icon">{icon}</div>
+      <div className="chat-icon"><ShapeIcon name={icon} size={16} /></div>
       <div className="chat-bubble">
         {body}
         {entry.kind !== 'text' && <span style={{ color: 'var(--muted)', fontSize: 12 }}> → {entry.path}</span>}
@@ -34,7 +33,7 @@ function Entry({ entry, onOpenFile }: { entry: ChatEntry; onOpenFile: (p: string
 function BotEntry({ m }: { m: PrivyBotMessage }) {
   return (
     <div className="chat-entry">
-      <div className="chat-icon">{m.role === 'assistant' ? '🤖' : '🧑'}</div>
+      <div className="chat-icon"><ShapeIcon name={m.role === 'assistant' ? 'bot' : 'user'} size={16} /></div>
       <div className={`chat-bubble${m.role === 'assistant' ? ' chat-bot' : ''}`}>
         {m.role === 'assistant' && <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12, display: 'block' }}>Hermes</span>}
         {m.text && (m.role === 'assistant'
@@ -173,13 +172,13 @@ export function ChatPanel(props: {
       </div>
       <div style={{ position: 'relative' }}>
         {mentionOpen && filteredRoles.length > 0 && (
-          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 6, background: 'var(--panel2)', border: '1px solid var(--border)', borderRadius: 8, maxHeight: 180, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 6, background: 'var(--panel2)', border: 'none', borderRadius: 12, maxHeight: 180, overflowY: 'auto', zIndex: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.4)', padding: 6 }}>
             {filteredRoles.map((r, i) => (
               <div key={r.id}
                 onMouseDown={(e) => { e.preventDefault(); selectRole(r); }}
                 onMouseEnter={() => setMentionIndex(i)}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', cursor: 'pointer', background: i === mentionIndex ? 'var(--chipbg)' : 'transparent' }}>
-                <span>🤖</span>
+                <ShapeIcon name="bot" size={16} />
                 <span style={{ fontWeight: i === mentionIndex ? 600 : 400 }}>{r.label}</span>
                 <span style={{ color: 'var(--muted)', fontSize: 12 }}>@{r.id}</span>
               </div>
@@ -189,8 +188,8 @@ export function ChatPanel(props: {
         <div className="send-input">
           <input value={text} placeholder={activeTab === 'sharing' ? 'Send message, file, folder, or @hermes…' : 'Message Hermes…'}
             onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown} />
-          <button className="btn" aria-label="attach file" onClick={() => fileRef.current?.click()}>📎</button>
-          <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()}>📁</button>
+          <button className="btn" aria-label="attach file" onClick={() => fileRef.current?.click()} title="Attach file"><ShapeIcon name="paperclip" size={16} /></button>
+          <button className="btn" aria-label="attach folder" onClick={() => dirRef.current?.click()} title="Attach folder"><ShapeIcon name="folder" size={16} /></button>
           <button className="btn primary" disabled={!text.trim()} onClick={() => submit(text)}>Send</button>
           <input ref={fileRef} type="file" multiple hidden onChange={onFile} />
           <input ref={dirRef} type="file" {...({ webkitdirectory: '' } as any)} multiple hidden onChange={onDir} />

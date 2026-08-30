@@ -2,6 +2,7 @@
 // Trash) plus the real category folders. Models the GNOME Files style navigation.
 
 import type { FileItem } from '@privy/shared';
+import type { IconName } from './components/icons';
 import { directChildren } from './sharingView';
 
 export type Location =
@@ -14,17 +15,17 @@ export function locationKey(loc: Location): string {
   return loc.type === 'folder' ? `folder:${loc.path}` : loc.type;
 }
 
-export interface Place { id: string; label: string; icon: string; location: Location }
+export interface Place { id: string; label: string; icon: IconName; location: Location }
 
 /** The real category folders shown in the sidebar (Pictures maps to the Images folder). */
 export const CATEGORY_PLACES: Place[] = [
-  { id: 'Documents', label: 'Documents', icon: '📄', location: { type: 'folder', path: 'Documents' } },
-  { id: 'Pictures',  label: 'Pictures',  icon: '🖼️', location: { type: 'folder', path: 'Images' } },
-  { id: 'Videos',    label: 'Videos',    icon: '🎬', location: { type: 'folder', path: 'Videos' } },
-  { id: 'Slides',    label: 'Slides',    icon: '📑', location: { type: 'folder', path: 'Slides' } },
-  { id: 'Markdown',  label: 'Markdown',  icon: '📝', location: { type: 'folder', path: 'Markdown' } },
-  { id: 'Folders',   label: 'Folders',   icon: '📂', location: { type: 'folder', path: 'Folders' } },
-  { id: 'Other',     label: 'Other',     icon: '📦', location: { type: 'folder', path: 'Other' } },
+  { id: 'Documents', label: 'Documents', icon: 'document', location: { type: 'folder', path: 'Documents' } },
+  { id: 'Pictures',  label: 'Pictures',  icon: 'image',    location: { type: 'folder', path: 'Images' } },
+  { id: 'Videos',    label: 'Videos',    icon: 'video',    location: { type: 'folder', path: 'Videos' } },
+  { id: 'Slides',    label: 'Slides',    icon: 'slide',    location: { type: 'folder', path: 'Slides' } },
+  { id: 'Markdown',  label: 'Markdown',  icon: 'markdown', location: { type: 'folder', path: 'Markdown' } },
+  { id: 'Folders',   label: 'Folders',   icon: 'folder',   location: { type: 'folder', path: 'Folders' } },
+  { id: 'Other',     label: 'Other',     icon: 'other',    location: { type: 'folder', path: 'Other' } },
 ];
 
 const CATEGORY_DISPLAY: Record<string, string> = { Images: 'Pictures' };

@@ -59,7 +59,6 @@ describe('PrivyCloudTab file-system sharing', () => {
     expect(await screen.findByTitle('Open Images')).toBeInTheDocument();
     expect(screen.getByTitle('Open Folders')).toBeInTheDocument();
     expect(screen.queryByText('a.png')).toBeNull();
-    expect(screen.getByText('2 items')).toBeInTheDocument();
   });
 
   it('navigates into a folder when its tile is clicked', async () => {
@@ -68,7 +67,6 @@ describe('PrivyCloudTab file-system sharing', () => {
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     expect(screen.getByTitle('Open sub')).toBeInTheDocument();
     expect(screen.queryByText('deep.txt')).toBeNull();
-    expect(screen.getByText('2 items')).toBeInTheDocument();
   });
 
   it('navigates back to the root via the back button', async () => {
@@ -77,6 +75,18 @@ describe('PrivyCloudTab file-system sharing', () => {
     fireEvent.click(screen.getByLabelText('back'));
     expect(screen.getByTitle('Open Images')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
+  });
+
+  it('goes forward after going back', async () => {
+    render(<PrivyCloudTab />);
+    fireEvent.doubleClick(await screen.findByTitle('Open Images')); // enter Images
+    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('back'));                // back to Home
+    expect(screen.getByTitle('Open Images')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
+    fireEvent.click(screen.getByLabelText('forward'));             // forward to Images
+    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
+    expect(screen.queryByTitle('Open Images')).toBeNull();
   });
 
   it('a sidebar category (Pictures) jumps into that folder', async () => {

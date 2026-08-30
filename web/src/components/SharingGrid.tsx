@@ -1,21 +1,30 @@
 import { useRef, type MouseEvent as ReactMouseEvent } from 'react';
-import { KINDS, type FileItem, type Kind } from '@privy/shared';
+import type { FileItem } from '@privy/shared';
 import { api } from '../api';
+import { FolderIcon, FilePageIcon } from './icons';
 import { useItemInteraction } from '../useItemInteraction';
 
-const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
-const LABEL: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label])) as Record<Kind, string>;
+/** A tile name may be capped at 3 lines; keep the truncation ending with the file
+    type so a long name reads "…word.md" instead of cutting the type off. The "…"
+    already carries the trailing punctuation, so the suffix is the bare type (no dot).
+    Only truncate when the whole name exceeds the ~3-line budget. */
+function displayName(name: string, isDir: boolean): string {
+  // Hidden files (".gitignore") and directories have no trailing type.
+  const dot = name.lastIndexOf('.');
+  const hasType = !isDir && dot > 0;
+  const type = hasType ? name.slice(dot + 1) : ''; // "md" — no leading dot
+  const base = hasType ? name.slice(0, dot) : name;
+  const MAX = 40; // ~3 lines at the default tile width
+  if (name.length > MAX) {
+    const cap = Math.max(MAX - type.length - 1, 0); // leave room for "…" + type
+    return base.slice(0, cap) + '…' + type;
+  }
+  return name;
+}
 
 /** Images get a real thumbnail (HEIC via its proxy, JPEG/PNG via the file URL). */
 const thumbUrl = (item: FileItem): string => (item.hasProxy ? api.proxyUrl(item.path) : api.fileUrl(item.path));
 const showThumb = (item: FileItem): boolean => item.kind === 'image';
-
-function fmtSize(n: number): string {
-  if (n === 0) return 'folder';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function RenameInput({ item, onCommit, onCancel }: { item: FileItem; onCommit(name: string): void; onCancel(): void }) {
   const done = useRef(false); // blur fires again on unmount after Enter/Escape — guard against double-fire
@@ -53,18 +62,17 @@ export function SharingGrid({ items, onSelect, onOpen, selected, singleClickOpen
   const { interactionFor, cls } = useItemInteraction({ onSelect, onOpen, onMoveTo, selected, singleClickOpens });
   if (items.length === 0) return <div className="empty-state">{emptyMessage ?? 'Nothing here yet — send something from the chat.'}</div>;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(calc(140px * var(--icon-scale, 1)), 1fr))', gap: 10 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(calc(140px * var(--icon-scale, 1)), 1fr))', gap: 6 }}>
       {items.map((item) => {
         const isRenaming = renaming === item.path;
         const body = (
           <>
-            <div className="tile-icon">{showThumb(item) ? <img src={thumbUrl(item)} alt="" className="tile-thumb" loading="lazy" /> : ICON[item.kind]}</div>
+            <div className="tile-icon">{showThumb(item) ? <img src={thumbUrl(item)} alt="" className="tile-thumb" loading="lazy" /> : (item.isDir ? <FolderIcon /> : <FilePageIcon kind={item.kind} />)}</div>
             {isRenaming
               ? <RenameInput item={item} onCommit={(v) => onCommitRename?.(item, v)} onCancel={() => onCancelRename?.()} />
               : (
                 <>
-                  <div className="tile-name">{item.name}{item.isDir ? ' ›' : ''}</div>
-                  <div className="tile-meta">{fmtSize(item.size)} · {LABEL[item.kind]}</div>
+                  <div className="tile-name">{displayName(item.name, item.isDir)}</div>
                 </>
               )}
           </>

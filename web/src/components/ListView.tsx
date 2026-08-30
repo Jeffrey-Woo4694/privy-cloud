@@ -1,9 +1,8 @@
-import { KINDS, type FileItem, type Kind } from '@privy/shared';
+import type { FileItem } from '@privy/shared';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useItemInteraction } from '../useItemInteraction';
 import type { Sort, SortKey } from '../sortItems';
-
-const ICON: Record<Kind, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.icon])) as Record<Kind, string>;
+import { ShapeIcon, KIND_ICON } from './icons';
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -41,7 +40,7 @@ export function ListView({ items, selected, singleClickOpens, onSelect, onOpen, 
               onClick={h.onClick} onDoubleClick={h.onDoubleClick}
               onDragStart={h.onDragStart} onDragEnd={h.onDragEnd} onDragOver={h.onDragOver} onDrop={h.onDrop}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTileContextMenu?.(e, item); }}>
-              <td className="list-name"><span className="list-icon">{ICON[item.kind]}</span><span className="list-fname">{item.name}</span></td>
+              <td className="list-name"><span className="list-icon"><ShapeIcon name={KIND_ICON[item.kind]} size={20} /></span><span className="list-fname">{item.name}</span></td>
               <td className="list-size">{item.isDir ? '—' : fmtSize(item.size)}</td>
               <td className="list-modified">{new Date(item.modifiedAt).toLocaleString()}</td>
             </tr>

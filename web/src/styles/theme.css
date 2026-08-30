@@ -1,12 +1,27 @@
 :root[data-theme='dark'] {
-  --bg: #0c0e12; --panel: #11141a; --panel2: #171b23; --border: #242a36;
-  --text: #e8ebf2; --muted: #8b92a6; --accent: #2dd4bf; --accent-ink: #0b0f14;
-  --chipbg: #1b202b; --bubble: #141922; --inputbg: #0f1218; --danger: #f87171; --danger-ink: #0b0f14;
+  /* Two-tone zones, imitating the GNOME native apps: the whole interface is a
+     slightly lighter charcoal (--bg), while the sharing page + chat box are a
+     darker surface (--panel). Surfaces that float (menus, dialogs, the active
+     segment thumb) raise from the panel via --panel2. */
+  --bg: #1e1f24; --panel: #14151a; --panel2: #2a2b32; --border: #2c2d34;
+  --text: #f2f4f8; --muted: #a3abb8; --accent: #2dd4bf; --accent-ink: #06201b;
+  --chipbg: #23242b; --bubble: #1e2027; --inputbg: #0f1015; --danger: #f07070; --danger-ink: #1a0606;
+  --focus-blue: #5aa7f0; /* Adwaita focus blue, brightened for the dark surface */
+  --sidebar-bg: #1c1e23; /* categories pane — a step lighter than the panel, so it reads as a raised layer on it */
+  /* Layered glass (macOS-style): a translucent fill plus a hairline specular
+     border and a brighter top rim, so surfaces read as panes of glass stacked
+     over the base instead of flat two-tone fills. */
+  --glass-border: rgba(255,255,255,.12); --glass-rim: rgba(255,255,255,.16);
+  --glass-shadow: 0 10px 30px rgba(0,0,0,.24); --glass-shadow-soft: 0 4px 14px rgba(0,0,0,.18);
 }
 :root[data-theme='light'] {
-  --bg: #f6f7f9; --panel: #ffffff; --panel2: #ffffff; --border: #e3e6ec;
-  --text: #1d2433; --muted: #6b7486; --accent: #0d9488; --accent-ink: #ffffff;
-  --chipbg: #eef1f6; --bubble: #f0f3f8; --inputbg: #ffffff; --danger: #dc2626; --danger-ink: #ffffff;
+  --bg: #e8e9ec; --panel: #ffffff; --panel2: #f0f1f5; --border: #dcdde3;
+  --text: #1d2028; --muted: #687080; --accent: #0d9488; --accent-ink: #ffffff;
+  --chipbg: #eef0f4; --bubble: #f2f3f7; --inputbg: #ffffff; --danger: #dc2626; --danger-ink: #ffffff;
+  --focus-blue: #3584e4; /* Adwaita focus blue */
+  --sidebar-bg: #f4f5f9; /* categories pane — a soft cool white, lifted off the panel */
+  --glass-border: rgba(20,25,40,.14); --glass-rim: rgba(255,255,255,.9);
+  --glass-shadow: 0 10px 30px rgba(20,25,40,.14); --glass-shadow-soft: 0 4px 14px rgba(20,25,40,.12);
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -15,62 +30,179 @@ html, body, #root { height: 100%; margin: 0; }
    always-on document scrollbar just adds a second, idle bar next to the panel's.
    The 1px-taller reflow the scrollbar used to prevent is handled by the panels. */
 html { overflow: hidden; }
-body { background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', Inter, Roboto, sans-serif; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: Inter, 'Inter var', -apple-system, 'Segoe UI', system-ui, Roboto, Cantarell, sans-serif; font-size: 14px; line-height: 1.45; overflow: hidden; }
 button { font: inherit; cursor: pointer; }
-.tab-bar { display: flex; gap: 6px; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); align-items: center; }
-.tab { padding: 5px 12px; border-radius: 6px; background: transparent; border: 1px solid transparent; color: var(--muted); }
-.tab.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.tab-spacer { flex: 1; }
+/* Scrollbars — simplified to just a thin rounded thumb, no arrow buttons. The
+   thumb is hidden until the pointer is over a (scrollable) region; `useIdleScroll`
+   puts `.scroll-active` on the container while the pointer is there and drops it
+   after a moment without movement, so the scrollbar never lingers when idle. */
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; background: transparent; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-button { display: none; height: 0; width: 0; } /* no ↑/↓ arrows */
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; }
+*::-webkit-scrollbar-thumb:active { background: rgba(128,134,150,.75); }
+.scroll-active { scrollbar-color: rgba(128,134,150,.45) transparent; }
+.scroll-active::-webkit-scrollbar-thumb { background: rgba(128,134,150,.45); }
+/* Top tab bar — a segmented pill (like GNOME Software's Explore/Installed/Updates)
+   holding the three tabs, plus a circular theme toggle and a quiet Logout. */
+/* The bar is a 3-column grid so the segmented pill floats dead-center of the top
+   area, while the theme toggle + Logout stay pinned to the right. */
+.tab-bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 10px 16px; background: transparent; }
+/* The central segmented pill — its original solid fill, etched with a glass edge
+   (hairline border + brighter top rim + soft shadow). */
+.seg {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--panel); border: 1px solid var(--glass-border); border-radius: 999px; padding: 4px;
+  box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim);
+}
+.tab { padding: 7px 18px; border-radius: 999px; background: transparent; border: none; color: var(--muted); font-size: 13.5px; font-weight: 500; white-space: nowrap; transition: background .15s ease, color .15s ease; }
+.tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,.05); }
+.tab.active { background: var(--panel2); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.28), inset 0 1px 0 var(--glass-rim); }
+.tab-left { display: flex; align-items: center; gap: 10px; justify-content: flex-start; } /* left column — holds the theme toggle, mirrored border with .tab-right */
+.tab-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+/* Circular icon button (the theme toggle) — a glass chip holding the icon, like
+   the native window/menu buttons. */
+.icon-btn {
+  width: 38px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--chipbg); border: 1px solid var(--glass-border);
+  color: var(--text); font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0;
+  box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim);
+  transition: background .15s ease;
+}
+.icon-btn:hover { background: var(--panel2); }
+/* Quiet text button (Logout) — its original transparent fill, edged with glass. */
+.ghost-btn {
+  background: transparent; border: 1px solid var(--glass-border); color: var(--muted);
+  font-size: 13.5px; padding: 7px 12px; border-radius: 999px; cursor: pointer;
+  box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim);
+  transition: background .15s ease, color .15s ease;
+}
+.ghost-btn:hover { background: var(--chipbg); color: var(--text); }
 .app-body { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+/* The sharing/chat panes — their original solid fill, layered with a hairline
+   specular border and a brighter top rim so they read as panes of glass. */
+.panel {
+  background: var(--panel); border: 1px solid var(--glass-border); border-radius: 16px;
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-rim);
+}
 .panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
-.kinds { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
-.kind-chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: var(--chipbg); color: var(--muted); border: 1px solid transparent; }
+.kinds { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.kind-chip { font-size: 12px; padding: 4px 12px; border-radius: 999px; background: var(--chipbg); color: var(--muted); border: none; transition: background .15s, color .15s; }
+.kind-chip:hover { color: var(--text); background: var(--panel2); }
 .kind-chip.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.tile { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: left; }
-.tile.selected { border-color: var(--accent); background: var(--chipbg); box-shadow: 0 0 0 1px var(--accent); }
-.tile.drop-target { border-style: dashed; border-color: var(--accent); }
-.tile:hover { border-color: var(--accent); }
-.tile-icon { font-size: calc(22px * var(--icon-scale, 1)); }
-.tile-name { font-size: 13px; margin-top: 6px; word-break: break-word; line-height: 1.2; }
-.tile-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
-.chat-entry { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-start; }
-.chat-icon { font-size: 14px; background: var(--chipbg); border-radius: 5px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.chat-bubble { background: var(--bubble); border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 13px; line-height: 1.45; max-width: 100%; overflow-wrap: anywhere; }
+/* File tiles — flat on the panel; a soft fill appears on hover, an accent ring on
+   selection, exactly how native apps treat a focused item. */
+/* A tile = a big fixed-size icon on top with the name directly beneath it. The
+   icon stays the same size in every block; only the block grows, and only as tall
+   as the name needs to wrap. Rows top-align, so a short-named tile leaves air
+   below it (like macOS Finder). */
+.tile { background: transparent; border: none; border-radius: 14px; padding: 6px 10px 6px; cursor: pointer; transition: box-shadow .15s ease; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; align-self: start; height: calc(94px * var(--icon-scale, 1) + 70px); }
+/* On hover the block tightens to its own content (dropping the extra height), so
+   a short-named block has no leftover space inside it. The background fades in on
+   hover but vanishes instantly on leave — fading it out while the block is back to
+   full height would leave a bigger "ghost" behind it. */
+.tile:hover { background: var(--chipbg); height: auto; transition: background .15s ease; }
+.tile.selected { background: var(--panel2); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.tile.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+/* The directory tile renders a real macOS-style blue folder SVG; non-image files
+   keep their kind emoji. Both are centred and sized generously for the roomy
+   blocks; image thumbnails stay in their natural colours. */
+.tile-icon { width: calc(94px * var(--icon-scale, 1)); height: calc(94px * var(--icon-scale, 1)); min-height: calc(94px * var(--icon-scale, 1)); display: flex; align-items: center; justify-content: center; }
+/* macOS document icon — a white page with the kind glyph centred as a small blue
+   badge (monochrome so it stays legible on the white page in both themes). */
+.file-page { width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
+.file-page svg.file-page-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.file-page-badge { position: relative; display: flex; align-items: center; justify-content: center; width: calc(40px * var(--icon-scale, 1)); height: calc(40px * var(--icon-scale, 1)); color: #4a80d8; }
+.file-page-badge svg { width: 100%; height: 100%; }
+/* Name shows up to 3 lines; anything longer is truncated with a  (so the block
+   never needs to grow past the uniform height). */
+.tile-name { width: 100%; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: 14px; margin-top: 4px; word-break: break-word; line-height: 1.25; font-weight: 600; color: var(--text); text-align: center; }
+.chat-entry { display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-start; }
+.chat-icon { background: var(--chipbg); border-radius: 9px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 6px; }
+.chat-bubble { background: var(--bubble); border: none; border-radius: 12px; padding: 8px 11px; font-size: 13.5px; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; }
 .chat-fname { color: var(--accent); font-weight: 600; }
 .chat-text-open { cursor: pointer; }
 .chat-text-open:hover { color: var(--accent); text-decoration: underline; }
-.chat-bot { border-color: var(--accent); }
-.chat-tab { font-size: 12px; padding: 3px 10px; border-radius: 6px; background: transparent; border: 1px solid transparent; color: var(--muted); cursor: pointer; }
-.chat-tab.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.sharing-sidebar { width: 160px; flex-shrink: 0; border-right: 1px solid var(--border); padding: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.sidebar-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; border: none; background: transparent; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; width: 100%; }
+.chat-bot { background: rgba(45,212,191,.10); }
+.chat-tab { font-size: 13px; padding: 6px 14px; border-radius: 999px; background: transparent; border: none; color: var(--muted); cursor: pointer; transition: background .15s ease, color .15s ease; }
+.chat-tab:hover { color: var(--text); background: var(--chipbg); }
+.chat-tab.active { background: var(--panel2); color: var(--focus-blue); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.22); }
+/* The category list — a slightly lighter pane than the sharing sheet, so it reads
+   as a raised layer on it. The glass edge (hairline border + top rim) stays. */
+.sharing-sidebar {
+  width: 160px; flex-shrink: 0; padding: 8px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--sidebar-bg); border: 1px solid var(--glass-border); border-radius: 12px;
+  box-shadow: inset 0 1px 0 var(--glass-rim);
+}
+.sidebar-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 9px; border: none; background: transparent; color: var(--text); font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer; width: 100%; transition: background .15s; }
 .sidebar-item:hover { background: var(--chipbg); }
-.sidebar-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.sidebar-icon { font-size: 15px; }
-.sidebar-divider { border-top: 1px solid var(--border); margin: 6px 4px; }
-.path-bar { display: flex; align-items: center; gap: 4px; padding: 4px 0 8px; overflow-x: auto; white-space: nowrap; }
-.path-back { background: none; border: none; color: var(--accent); font-size: 18px; cursor: pointer; padding: 0 4px; }
-.path-back:disabled { color: var(--muted); cursor: default; }
+.sidebar-item.active { background: var(--panel2); color: var(--focus-blue); font-weight: 600; }
+.sidebar-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+.sidebar-icon svg { width: 100%; height: 100%; }
+.sidebar-divider { height: 1px; background: transparent; margin: 8px 6px; }
+.path-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Back/forward — a single soft pill holding the two buttons (no hairline divider).
+   Disabled buttons keep the group's shape. */
+.path-nav { display: inline-flex; align-items: stretch; flex-shrink: 0; background: var(--chipbg); border-radius: 999px; overflow: hidden; border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim); }
+.path-nav-btn { width: 34px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text); font-size: 18px; line-height: 1; cursor: pointer; transition: background .15s; }
+.path-nav-btn:hover:not(:disabled) { background: var(--panel2); color: var(--accent); }
+.path-nav-btn:disabled { color: var(--muted); cursor: default; opacity: .5; }
+/* Slight hairline between the back and forward chevrons — a short segment inset
+   from the top and bottom edges ("broken heads and tails"), not a full-height rule. */
+.path-nav-div { width: 1px; align-self: stretch; flex-shrink: 0; background: var(--glass-border); margin: 5px 0; }
+/* Breadcrumb "field" — a recessed pill that flexes to fill the middle; long paths
+   scroll inside it rather than pushing the bar wider. Shares the nav pill's border
+   and chip background so the two read as the same family. */
+.path-field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; height: 32px; padding: 0 12px; box-sizing: border-box; background: var(--chipbg); border: 1px solid var(--glass-border); border-radius: 999px; overflow-x: auto; white-space: nowrap; box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim); }
+/* Trailing view/create group — one fused pill (like the back/forward pill) holding
+   the grid/list toggle and the create ▾ button, divided by a hairline. */
+.trail { display: inline-flex; align-items: stretch; background: var(--chipbg); border: 1px solid var(--glass-border); border-radius: 999px; box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim); position: relative; }
+.trail-btn { width: 38px; height: 32px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; color: var(--text); cursor: pointer; transition: background .15s; }
+.trail-btn:first-of-type { border-top-left-radius: 999px; border-bottom-left-radius: 999px; }
+.trail-btn:last-of-type { border-top-right-radius: 999px; border-bottom-right-radius: 999px; }
+.trail-btn:hover { background: var(--panel2); }
+/* Hairline between the grid/list toggle and the ⋯ view-options, inset like the nav
+   block's divider (broken heads and tails). */
+.trail-div { width: 1px; align-self: stretch; flex-shrink: 0; background: var(--glass-border); margin: 5px 0; }
 .path-seg { display: inline-flex; align-items: center; }
-.path-sep { color: var(--muted); margin: 0 2px; font-size: 12px; }
-.path-crumb { background: none; border: none; color: var(--accent); font-size: 13px; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
-.path-crumb:hover { background: var(--chipbg); }
-.status-bar { color: var(--muted); font-size: 12px; padding-top: 8px; }
+.path-sep { color: var(--muted); margin: 0 2px; font-size: 12.5px; }
+.path-crumb { background: transparent; border: none; color: var(--text); font-size: 13.5px; cursor: pointer; padding: 3px 7px; border-radius: 7px; }
+.path-crumb:hover { background: var(--chipbg); color: var(--accent); }
+.path-current { color: var(--accent); font-weight: 600; font-size: 13.5px; padding: 3px 7px; white-space: nowrap; }
 .tile-icon { min-height: 24px; }
-.tile-thumb { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; display: block; }
+.tile-thumb { width: calc(94px * var(--icon-scale, 1)); height: calc(94px * var(--icon-scale, 1)); object-fit: cover; border-radius: 12px; display: block; }
 .trash-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 13px; word-break: break-all; }
 .trash-row .btn { flex-shrink: 0; }
+.trash-icon { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--muted); }
 .chat-time { color: var(--muted); font-size: 11px; display: block; margin-top: 3px; }
-.send-input { margin-top: auto; display: flex; gap: 8px; align-items: center; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
-.send-input input { flex: 1; background: transparent; border: none; color: var(--text); outline: none; font: inherit; }
-.btn { background: var(--chipbg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 10px; font-size: 13px; }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+/* The message composer — its original fill, etched with the glass edge. */
+.send-input {
+  margin-top: auto; display: flex; gap: 8px; align-items: center;
+  background: var(--inputbg); border: 1px solid var(--glass-border); border-radius: 999px;
+  padding: 6px 6px 6px 14px;
+  box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim);
+}
+.send-input input { flex: 1; min-width: 0; background: transparent; border: none; color: var(--text); outline: none; font: inherit; }
+.send-input .btn { flex-shrink: 0; border-radius: 999px; padding: 6px 12px; }
+/* Standard buttons — their original fills, etched with the glass edge. The solid
+   accent/danger buttons drop the hairline so the CTA still reads as the loudest. */
+.btn {
+  background: var(--chipbg); border: 1px solid var(--glass-border); border-radius: 10px;
+  color: var(--text); padding: 7px 14px; font-size: 13.5px; font-weight: 500;
+  box-shadow: var(--glass-shadow-soft), inset 0 1px 0 var(--glass-rim);
+  transition: background .15s;
+}
+.btn:hover { background: var(--panel2); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; border-color: transparent; }
+.btn.primary:hover { background: #26bfab; }
 .back-link { background: none; border: none; color: var(--accent); font-size: 13px; padding: 4px 0; }
 .editor { display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; }
-.editor-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+.editor-title { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text); background: var(--panel); border: none; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
 .editor-error { color: var(--danger); font-size: 12px; margin-bottom: 8px; }
-.editor textarea { flex: 1; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 14px; padding: 10px; resize: none; outline: none; }
+.editor textarea { flex: 1; background: var(--inputbg); border: none; border-radius: 12px; color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 14px; padding: 12px; resize: none; outline: none; }
 /* CodeMirror mount (CodeEditor): constrain the whole .cm-theme > .cm-editor >
    .cm-scroller chain so the editor fills the surface and CM's scroller owns the
    scrolling (no runaway content height, no outer scrollbar). */
@@ -82,21 +214,22 @@ button { font: inherit; cursor: pointer; }
 /* Expanded editor: cover the whole interface (top tab bar + left sharing panel +
    right chat panel) with a fixed, full-viewport theme-colored layer. */
 .viewer-fullscreen { position: fixed; inset: 0; z-index: 1002; background: var(--bg); padding: 8px 12px; }
-.viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+.viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--inputbg); border: none; border-radius: 12px; overflow: auto; }
 .viewer-body img, .viewer-body video { max-width: 100%; max-height: 100%; }
 .placeholder-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; color: var(--muted); }
 .empty-state { color: var(--muted); font-size: 14px; padding: 30px; text-align: center; }
-.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--border); color: var(--text); padding: 10px 16px; border-radius: 8px; z-index: 10; }
-.ctx-menu { min-width: 180px; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.35); padding: 4px; z-index: 1000; }
-.ctx-menu-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; user-select: none; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: none; color: var(--text); padding: 11px 18px; border-radius: 12px; z-index: 10; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.ctx-menu { min-width: 190px; background: var(--panel2); border: none; border-radius: 12px; box-shadow: 0 10px 32px rgba(0,0,0,.4); padding: 6px; z-index: 1000; }
+.ctx-menu-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; cursor: pointer; user-select: none; }
 .ctx-menu-item:hover:not([aria-disabled='true']) { background: var(--chipbg); }
 .ctx-menu-item[aria-disabled='true'] { color: var(--muted); cursor: default; opacity: .6; }
 .ctx-menu-item.danger { color: var(--danger); }
-.ctx-menu-icon { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
-.ctx-menu-sep { border-top: 1px solid var(--border); margin: 4px 6px; }
-.tile-rename-input { width: 100%; background: var(--inputbg); border: 1px solid var(--accent); border-radius: 6px; color: var(--text); font-size: 13px; padding: 4px 6px; margin-top: 6px; outline: none; }
-.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; z-index: 1001; }
-.confirm-dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; max-width: 360px; box-shadow: 0 12px 32px rgba(0,0,0,.4); }
+.ctx-menu-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ctx-menu-icon svg { width: 100%; height: 100%; }
+.ctx-menu-sep { border-top: 1px solid var(--border); opacity: .5; margin: 4px 6px; }
+.tile-rename-input { width: 100%; background: var(--inputbg); border: none; border-radius: 8px; color: var(--text); font-size: 13px; padding: 5px 8px; margin-top: 6px; outline: none; box-shadow: 0 0 0 2px var(--accent); }
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1001; }
+.confirm-dialog { background: var(--panel); border: none; border-radius: 16px; padding: 18px; max-width: 360px; box-shadow: 0 16px 44px rgba(0,0,0,.45); }
 .confirm-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
 .confirm-text { font-size: 13px; color: var(--muted); margin-bottom: 16px; word-break: break-all; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
@@ -129,13 +262,13 @@ button { font: inherit; cursor: pointer; }
 
 /* Create-folder/file modal (New Folder / New File). */
 .dialog-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-.create-dialog { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 18px; width: 320px; max-width: 90vw; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4); }
+.create-dialog { background: var(--panel2); border: none; border-radius: 16px; padding: 20px; width: 320px; max-width: 90vw; box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45); }
 .create-dialog-head { position: relative; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
 .create-dialog-title { font-size: 15px; font-weight: 600; color: var(--text); }
 .create-dialog-close { position: absolute; right: 0; top: 0; background: transparent; border: none; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px; }
 .create-dialog-close:hover { color: var(--danger); }
-.create-dialog-input { width: 100%; box-sizing: border-box; background: var(--inputbg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 10px 12px; outline: none; margin-bottom: 16px; }
-.create-dialog-input:focus { border-color: var(--accent); }
+.create-dialog-input { width: 100%; box-sizing: border-box; background: var(--inputbg); border: none; border-radius: 10px; color: var(--text); font-size: 14px; padding: 10px 12px; outline: none; margin-bottom: 16px; }
+.create-dialog-input:focus { box-shadow: 0 0 0 2px var(--accent); }
 .create-dialog-actions { display: flex; justify-content: center; }
 
 /* List view of the sharing grid (Name | Size | Modified, sortable). Rows are
@@ -151,8 +284,9 @@ button { font: inherit; cursor: pointer; }
 .list-row.selected { background: var(--chipbg); box-shadow: inset 2px 0 0 var(--accent); }
 .list-row.drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
 .list-name { display: flex; align-items: center; gap: 10px; min-width: 0; height: calc(48px * var(--icon-scale, 1)); padding: 0 12px; }
-.list-icon { flex-shrink: 0; text-align: center; font-size: calc(20px * var(--icon-scale, 1)); line-height: 1; width: calc(20px * var(--icon-scale, 1) + 6px); }
-.list-fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: calc(20px * var(--icon-scale, 1)); height: calc(20px * var(--icon-scale, 1)); }
+.list-icon svg { width: 100%; height: 100%; }
+.list-fname { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .list-size, .list-modified { color: var(--muted); white-space: nowrap; text-align: right; padding: 0 12px; }
 .list-size { min-width: 72px; }
 
@@ -241,15 +375,15 @@ button { font: inherit; cursor: pointer; }
    transparent mono with no pill so the codeblock owns the styling. */
 .markdown code {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  font-size: .92em; background: var(--chipbg); border: 1px solid var(--border);
-  border-radius: 4px; padding: 1px 5px;
+  font-size: .92em; background: var(--chipbg); border: none;
+  border-radius: 5px; padding: 1px 6px;
 }
 .markdown pre code { background: none; border: none; padding: 0; border-radius: 0; }
 /* A code block emitted without a language tag — no header/copy, but still a
    proper scrolling code container so multi-line snippets keep their shape. */
 .markdown pre.md-plain {
-  margin: .5em 0; background: var(--md-code-bg); border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px; overflow-x: auto;
+  margin: .5em 0; background: var(--md-code-bg); border: none;
+  border-radius: 12px; padding: 10px 12px; overflow-x: auto;
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   font-size: 13px; line-height: 1.55; color: var(--md-code-fg);
 }
@@ -258,12 +392,12 @@ button { font: inherit; cursor: pointer; }
 /* Code block — the signature: rounded container, header row (language + copy
    button), scrollable token-highlighted body. */
 .codeblock {
-  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  border: none; border-radius: 12px; overflow: hidden;
   margin: .5em 0; background: var(--code-head-bg);
 }
 .codeblock-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 4px 8px; background: var(--code-head-bg); border-bottom: 1px solid var(--border);
+  padding: 4px 8px; background: var(--code-head-bg);
 }
 .codeblock-lang {
   font-size: 11px; color: var(--muted); text-transform: lowercase;
@@ -325,7 +459,7 @@ button { font: inherit; cursor: pointer; }
 .codeviewer-gutter {
   position: sticky; left: 0; flex: 0 0 auto; align-self: flex-start;
   padding: 10px 10px 10px 12px; text-align: right; user-select: none;
-  color: var(--muted); background: var(--code-head-bg); border-right: 1px solid var(--border);
+  color: var(--muted); background: var(--code-head-bg);
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 1.55;
   white-space: pre;
 }
@@ -338,8 +472,8 @@ button { font: inherit; cursor: pointer; }
 .mobile-content { height: 100%; display: flex; flex-direction: column; transition: transform .25s ease; }
 .mobile-content.open { transform: translateX(var(--drawer-w)); }
 .mobile-topbar {
-  display: flex; align-items: center; gap: 4px; padding: 6px 8px; flex-shrink: 0;
-  background: var(--panel); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px; flex-shrink: 0;
+  background: var(--bg);
 }
 .mobile-menu { flex-shrink: 0; font-size: 18px; padding: 4px 9px; }
 .mobile-title { font-size: 15px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -353,7 +487,7 @@ button { font: inherit; cursor: pointer; }
 }
 .mobile-drawer.open { transform: translateX(0); }
 .mobile-drawer-title { font-size: 15px; font-weight: 700; color: var(--text); padding: 6px 10px 12px; }
-.mobile-drawer-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px; border: none; background: transparent; border-radius: 8px; color: var(--text); font-size: 15px; cursor: pointer; }
+.mobile-drawer-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px; border: none; background: transparent; border-radius: 10px; color: var(--text); font-size: 15px; cursor: pointer; transition: background .15s; }
 .mobile-drawer-item:hover { background: var(--chipbg); }
 .mobile-drawer-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .mobile-drawer-icon { font-size: 18px; }
