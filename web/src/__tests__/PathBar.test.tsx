@@ -43,13 +43,13 @@ describe('PathBar', () => {
     expect(base.onForward).toHaveBeenCalled();
   });
 
-  it('mobile hides the back/forward nav group and the Home crumb', () => {
-    renderBar({ mobile: true });
+  it('mobile renders no path bar at all (nav group and breadcrumb field)', () => {
+    render(<PathBar location={{ type: 'folder', path: 'Images/sub' } as const}
+      onNavigate={vi.fn()} onBack={vi.fn()} onForward={vi.fn()} canGoBack canGoForward={false} mobile />);
+    expect(document.querySelector('.path-bar')).toBeNull();
     expect(screen.queryByLabelText('back')).toBeNull();
     expect(screen.queryByLabelText('forward')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Home' })).toBeNull();
-    // Ancestor crumbs (Pictures) and the current segment (sub) still render.
-    expect(screen.getByRole('button', { name: 'Pictures' })).toBeInTheDocument();
-    expect(screen.getByText('sub')).toBeInTheDocument();
+    expect(screen.queryByText('sub')).toBeNull();
   });
 });

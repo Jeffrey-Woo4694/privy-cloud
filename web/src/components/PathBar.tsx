@@ -11,23 +11,21 @@ export function PathBar({ location, onNavigate, onBack, onForward, canGoBack, ca
   onForward: () => void;
   canGoBack: boolean;
   canGoForward: boolean;
-  // On the phone the sharing view has its own "← Back" button, so the ‹› nav group
-  // is redundant, and jumping to Home from a deep folder is better served by the sidebar.
+  // On the phone the sharing view has its own "← Back" button and the sidebar for
+  // navigation, so the whole path bar (back/forward nav + breadcrumb field) is dropped.
   mobile?: boolean;
 }) {
+  if (mobile) return null;
   const segments = pathSegments(location);
-  // Ancestor directories — clickable. On mobile the Home root crumb is dropped.
-  const crumbs = segments.slice(0, -1).filter((s) => !mobile || s.key !== 'home');
+  const crumbs = segments.slice(0, -1); // ancestor directories — clickable
   const current = segments[segments.length - 1]; // where you are now — reads, not a button
   return (
     <div className="path-bar">
-      {!mobile && (
-        <div className="path-nav" role="group" aria-label="navigate">
-          <button className="path-nav-btn" onClick={onBack} disabled={!canGoBack} aria-label="back">‹</button>
-          <span className="path-nav-div" aria-hidden="true" />
-          <button className="path-nav-btn" onClick={onForward} disabled={!canGoForward} aria-label="forward">›</button>
-        </div>
-      )}
+      <div className="path-nav" role="group" aria-label="navigate">
+        <button className="path-nav-btn" onClick={onBack} disabled={!canGoBack} aria-label="back">‹</button>
+        <span className="path-nav-div" aria-hidden="true" />
+        <button className="path-nav-btn" onClick={onForward} disabled={!canGoForward} aria-label="forward">›</button>
+      </div>
       <div className="path-field">
         {crumbs.map((s, i) => (
           <span key={s.key} className="path-seg">
