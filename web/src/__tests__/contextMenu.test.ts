@@ -5,7 +5,7 @@ import type { TrashItem } from '../pages/PrivyCloudTab';
 
 const file: FileItem = { name: 'note.md', path: 'Markdown/note.md', kind: 'markdown', size: 10, isDir: false, modifiedAt: 'x' };
 const folder: FileItem = { name: 'docs', path: 'Folders/docs', kind: 'folder', size: 0, isDir: true, modifiedAt: 'x' };
-const trash: TrashItem = { path: 'Images/a.png', name: 'a.png', isDir: false, size: 10, modifiedAt: 'x' };
+const trash: TrashItem = { path: 'Pictures/a.png', name: 'a.png', isDir: false, size: 10, modifiedAt: 'x' };
 
 describe('buildMenu', () => {
   it('background with canCreate offers New Folder then New File', () => {

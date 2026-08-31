@@ -18,6 +18,8 @@ import { ChatPanel } from '../components/ChatPanel';
 import { FileViewer } from '../components/FileViewer';
 import { usePrivyHermes } from '../hermes/usePrivyHermes';
 import { CATEGORY_PLACES, itemsForLocation, locationKey, type Location, type Place } from '../sharingLocation';
+import { syncSelected } from '../sharingView';
+import { addBookmark, bookmarkLabel, loadBookmarks, moveBookmark, removeBookmark, renameBookmark, saveBookmarks, type Bookmark } from '../bookmarks';
 
 // The virtual places (sidebar's first group) + the category folders, shown as a
 // horizontal, scrollable place row on the phone where the desktop sidebar is hidden.
@@ -79,6 +81,9 @@ export function PrivyCloudTab() {
   useEffect(() => { localStorage.setItem('privy-show-hidden', showHidden ? '1' : '0'); }, [showHidden]);
   const showHiddenRef = useRef(showHidden);
   useEffect(() => { showHiddenRef.current = showHidden; }, [showHidden]);
+  // Quick-access bookmarks: folders dragged into the sidebar rail; order persisted.
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(loadBookmarks);
+  useEffect(() => saveBookmarks(bookmarks), [bookmarks]);
 
   // The @hermes bot works in the Privy Cloud base so it can read/write the files.
   useEffect(() => { api.getMeta().then((m) => setRootDir(m.root)).catch(() => {}); }, []);
@@ -93,6 +98,9 @@ export function PrivyCloudTab() {
     try {
       const [its, entries] = await Promise.all([api.listItems(undefined, showHiddenRef.current), api.listChat()]);
       setItems(its);
+      // Keep an open viewer live: re-resolve its item against the fresh listing so
+      // flags like proxyPending/hasProxy (transcode finished) reach the editor.
+      setSelected((s) => syncSelected(s, its));
       setChat(chronological(entries));
     } catch (e) { setError((e as Error).message); }
   }, []);
@@ -102,7 +110,7 @@ export function PrivyCloudTab() {
   useEffect(() => {
     const disconnect = connect({
       onItemsChanged: () => {
-        void api.listItems(undefined, showHiddenRef.current).then(setItems);
+        void api.listItems(undefined, showHiddenRef.current).then((its) => { setItems(its); setSelected((s) => syncSelected(s, its)); });
         void api.listChat().then((e) => setChat(chronological(e)));
         void refreshTrash();
       },
@@ -343,6 +351,8 @@ export function PrivyCloudTab() {
     try {
       const res = await api.rename(item.path, value);
       setRenaming(null);
+      // Keep any bookmark of this folder (or its descendants' names) accurate.
+      setBookmarks((list) => renameBookmark(list, item.path, res.path, bookmarkLabel(res.path)));
       if (loc.type === 'folder' && loc.path === item.path) {
         navigate({ type: 'folder', path: res.path });
       } else if (loc.type === 'folder' && loc.path.startsWith(item.path + '/')) {
@@ -352,6 +362,18 @@ export function PrivyCloudTab() {
     } catch (e) { setError((e as Error).message); setRenaming(null); }
   };
   const cancelRename = useCallback(() => setRenaming(null), []);
+
+  // Sidebar bookmarks: a dropped folder becomes a quick-access entry (only real
+  // directories, deduped by path); reorder persists the drag order; "Remove" drops
+  // just the bookmark; "Rename" renames the actual directory on disk and repoints
+  // the bookmark at its new path + label.
+  const bookmarkRename = async (bm: Bookmark, newName: string) => {
+    try {
+      const res = await api.rename(bm.path, newName);
+      setBookmarks((list) => renameBookmark(list, bm.path, res.path, res.path.split('/').pop() ?? newName));
+      void refresh();
+    } catch (e) { setError((e as Error).message); }
+  };
 
   const confirmDeleteForever = async () => {
     if (!confirmDelete) return;
@@ -373,7 +395,16 @@ export function PrivyCloudTab() {
   // walks up the folder history instead.
   const filesLayout = (
     <div style={{ display: 'flex', gap: 12, flex: 1, minHeight: 0 }}>
-      {!isMobile && <SharingSidebar location={loc} onSelect={navigate} />}
+      {!isMobile && (
+        <SharingSidebar location={loc} onSelect={navigate} bookmarks={bookmarks}
+          onDropFolder={(path) => {
+            const found = items.find((i) => i.path === path);
+            if (found?.isDir) setBookmarks((b) => addBookmark(b, path)); // folders only
+          }}
+          onReorder={(from, to) => setBookmarks((b) => moveBookmark(b, from, to))}
+          onRemove={(path) => setBookmarks((b) => removeBookmark(b, path))}
+          onRename={(bm, newName) => void bookmarkRename(bm, newName)} />
+      )}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {isMobile && (
           <div className="mobile-places" role="navigation" aria-label="places">
@@ -457,7 +488,7 @@ export function PrivyCloudTab() {
     return (
       <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%', height: '100%', minWidth: 0 }}>
         <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} onTrash={trashFile} />
+          <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} onTrash={trashFile} onRefreshItems={refresh} />
         </div>
         {!isMobile && rightPanel}
         {error && <div className="toast">{error}</div>}

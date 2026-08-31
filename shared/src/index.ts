@@ -3,7 +3,7 @@ export type Kind = 'image' | 'video' | 'slide' | 'document' | 'markdown' | 'audi
 export interface KindMeta { key: Kind; label: string; icon: string; folder: string; extensions: string[] }
 
 export const KINDS: KindMeta[] = [
-  { key: 'image',    label: 'Images',    icon: '🖼️', folder: 'Images',    extensions: ['jpg','jpeg','png','gif','webp','svg','bmp','heic'] },
+  { key: 'image',    label: 'Pictures',  icon: '🖼️', folder: 'Pictures',  extensions: ['jpg','jpeg','png','gif','webp','svg','bmp','heic'] },
   { key: 'video',    label: 'Videos',    icon: '🎬', folder: 'Videos',    extensions: ['mp4','mov','webm','mkv','avi'] },
   { key: 'slide',    label: 'Slides',    icon: '📑', folder: 'Slides',    extensions: ['ppt','pptx','key','odp'] },
   { key: 'document', label: 'Documents', icon: '📄', folder: 'Documents', extensions: ['pdf','doc','docx','xls','xlsx','odt','csv','json','xml'] },

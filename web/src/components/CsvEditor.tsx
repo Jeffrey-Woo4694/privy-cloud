@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { parseCsv, toCsv } from '../csv';
+import { useDebouncedAutosave } from '../useDebouncedAutosave';
 
 /** A spreadsheet-style editor for CSV: editable cell grid with add/remove rows and
  *  columns, saving back to valid (RFC 4180) CSV. This is the byte-faithful fallback
@@ -18,13 +19,6 @@ export function CsvEditor({ initialText, name, onSave, onCancel }: {
   const [saving, setSaving] = useState(false);
   const cols = Math.max(1, ...rows.map((r) => r.length));
 
-  const updateCell = (r: number, c: number, v: string) =>
-    setRows((rs) => rs.map((row, i) => (i === r ? row.map((x, j) => (j === c ? v : x)) : row)));
-  const addRow = () => setRows((rs) => [...rs, Array(cols).fill('')]);
-  const deleteRow = (r: number) => setRows((rs) => rs.filter((_, i) => i !== r));
-  const addCol = () => setRows((rs) => rs.map((row) => [...row, '']));
-  const deleteCol = (c: number) => setRows((rs) => rs.map((row) => row.filter((_, j) => j !== c)));
-
   const save = async () => {
     if (saving) return;
     setSaving(true);
@@ -40,6 +34,16 @@ export function CsvEditor({ initialText, name, onSave, onCancel }: {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // Autosave ~1.2s after the last edit (cell or row/column structure change).
+  const schedule = useDebouncedAutosave(() => void saveRef.current());
+  const updateCell = (r: number, c: number, v: string) => {
+    setRows((rs) => rs.map((row, i) => (i === r ? row.map((x, j) => (j === c ? v : x)) : row)));
+    schedule();
+  };
+  const addRow = () => { setRows((rs) => [...rs, Array(cols).fill('')]); schedule(); };
+  const deleteRow = (r: number) => { setRows((rs) => rs.filter((_, i) => i !== r)); schedule(); };
+  const addCol = () => { setRows((rs) => rs.map((row) => [...row, ''])); schedule(); };
+  const deleteCol = (c: number) => { setRows((rs) => rs.map((row) => row.filter((_, j) => j !== c))); schedule(); };
 
   return (
     <div className="viewer-body" style={{ flexDirection: 'column', alignItems: 'stretch' }}>

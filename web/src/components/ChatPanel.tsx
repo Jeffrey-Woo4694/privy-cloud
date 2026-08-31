@@ -70,7 +70,7 @@ export function ChatPanel(props: {
   const hermesRef = useRef<HTMLDivElement>(null);
 
   // Drop a file/folder onto the chat → it uploads to its kind category (file → the
-  // Images/Videos/… folder by type; directory → Folders/<name>), the same as the
+  // Pictures/Videos/… folder by type; directory → Folders/<name>), the same as the
   // 📎 / 📁 buttons. Loose files and directories may arrive in one drop, so partition
   // them: each directory group keeps its structure via webkitRelativePath.
   const { dragging, onDragOver, onDragLeave, onDrop } = useFileDrop((items: DropItem[]) => {

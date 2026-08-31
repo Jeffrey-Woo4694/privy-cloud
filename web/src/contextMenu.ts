@@ -2,7 +2,8 @@ import type { FileItem } from '@privy/shared';
 import type { TrashItem } from './pages/PrivyCloudTab';
 import type { IconName } from './components/icons';
 
-export type MenuAction = 'new-folder' | 'new-file' | 'open' | 'download' | 'rename' | 'trash' | 'restore' | 'delete-forever' | 'share';
+export type MenuAction = 'new-folder' | 'new-file' | 'open' | 'download' | 'rename' | 'trash' | 'restore' | 'delete-forever' | 'share'
+  | 'remove-bookmark' | 'rename-bookmark';
 
 export type MenuContext =
   | { kind: 'background'; canCreate: boolean }

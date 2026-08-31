@@ -26,9 +26,9 @@ describe('storage', () => {
     await initRootStructure(root);
     const entry = await storeFile(root, 'photo.png', Buffer.from('png'));
     expect(entry.kind).toBe('image');
-    expect(entry.path).toBe('Images/photo.png');
+    expect(entry.path).toBe('Pictures/photo.png');
     const entries = await readEntries(root);
-    expect(entries[0].path).toBe('Images/photo.png');
+    expect(entries[0].path).toBe('Pictures/photo.png');
   });
 
   it('uniquePath adds a timestamp suffix on collision', async () => {

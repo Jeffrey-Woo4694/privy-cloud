@@ -24,7 +24,7 @@ describe('directory', () => {
     for (const d of ['Hermes Agent', 'Coding Project', 'Privy Cloud']) {
       expect(existsSync(join(root, d))).toBe(true);
     }
-    for (const sub of ['Images','Videos','Slides','Documents','Markdown','Folders','Other']) {
+    for (const sub of ['Pictures','Videos','Slides','Documents','Markdown','Folders','Other']) {
       expect(existsSync(join(root, 'Privy Cloud', sub))).toBe(true);
     }
   });

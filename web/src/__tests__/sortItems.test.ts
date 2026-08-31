@@ -46,7 +46,7 @@ describe('sortItems', () => {
     const img = item('z.png', 0, '2026-01-01', 'image');
     const doc = item('a.docx', 0, '2026-01-01', 'document');
     const folder = item('m', 0, '2026-01-01', 'folder');
-    // Ascending by kind label: Documents, Folders, Images.
+    // Ascending by kind label: Documents, Folders, Pictures.
     expect(sortItems([img, doc, folder], { key: 'type', dir: 'asc' }).map((i) => i.name)).toEqual(['a.docx', 'm', 'z.png']);
   });
 

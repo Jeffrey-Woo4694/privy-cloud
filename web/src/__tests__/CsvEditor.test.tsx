@@ -1,8 +1,21 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import { CsvEditor } from '../components/CsvEditor';
 
 describe('CsvEditor', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('autosaves ~1.2s after a cell edit', async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<CsvEditor initialText={'a,b\nc,d'} name="data.csv" onSave={onSave} onCancel={() => {}} />);
+    const inputs = screen.getAllByRole('textbox');
+    fireEvent.change(inputs[0], { target: { value: 'X' } });
+    expect(onSave).not.toHaveBeenCalled();
+    act(() => { vi.advanceTimersByTime(1200); });
+    await act(async () => { await Promise.resolve(); });
+    expect(onSave).toHaveBeenCalledWith('X,b\nc,d');
+  });
   it('renders cells and saves edited content as CSV', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     // JSX attribute strings don't process JS escapes, so pass the newline via a JS expression.

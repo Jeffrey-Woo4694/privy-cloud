@@ -4,7 +4,7 @@ import { PathBar } from '../components/PathBar';
 
 function renderBar(overrides: Partial<Parameters<typeof PathBar>[0]> = {}) {
   const base = {
-    location: { type: 'folder', path: 'Images/sub' } as const,
+    location: { type: 'folder', path: 'Pictures/sub' } as const,
     onNavigate: vi.fn(),
     onBack: vi.fn(),
     onForward: vi.fn(),
@@ -28,9 +28,9 @@ describe('PathBar', () => {
     const base = renderBar();
     fireEvent.click(screen.getByRole('button', { name: 'Home' }));
     expect(base.onNavigate).toHaveBeenCalledWith({ type: 'home' });
-    // The Images folder is shown by its friendly category label, "Pictures".
+    // Category folders display their real (identical) name in the breadcrumb.
     fireEvent.click(screen.getByRole('button', { name: 'Pictures' }));
-    expect(base.onNavigate).toHaveBeenCalledWith({ type: 'folder', path: 'Images' });
+    expect(base.onNavigate).toHaveBeenCalledWith({ type: 'folder', path: 'Pictures' });
     // The current directory ("sub") is where you are — it reads, it is not clickable.
     expect(screen.getByText('sub')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'sub' })).toBeNull();

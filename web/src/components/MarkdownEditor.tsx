@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDebouncedAutosave } from '../useDebouncedAutosave';
 
 export function MarkdownEditor({ path, initialText, onSave }: { path: string; initialText: string; onSave: (c: string) => Promise<void> }) {
   const [content, setContent] = useState(initialText);
@@ -30,15 +31,12 @@ export function MarkdownEditor({ path, initialText, onSave }: { path: string; in
 
   // Autosave: save ~1.2s after the last keystroke. Each save is backed up server-side
   // (bounded version history), so autosaving never destroys the prior content. The
-  // timer is reset on every change, so a continuous typing burst saves once it pauses.
-  const autosaveTimer = useRef<number | null>(null);
-  useEffect(() => {
-    return () => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); };
-  }, []);
+  // timer is reset on every change, so a continuous typing burst saves once it pauses;
+  // a pending edit also flushes if the editor unmounts mid-debounce (Esc closes).
+  const scheduleSave = useDebouncedAutosave(save);
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
-    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = window.setTimeout(() => saveRef.current(), 1200);
+    scheduleSave();
   };
 
   // Ctrl+S / Cmd+S saves the file and prevents the browser's default "Save Page".

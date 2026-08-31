@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDebouncedAutosave } from '../useDebouncedAutosave';
 
 export function TextFileEditor({ path, initialText, onSave }: { path: string; initialText: string; onSave: (c: string) => Promise<void> }) {
   const [content, setContent] = useState(initialText);
@@ -29,6 +30,8 @@ export function TextFileEditor({ path, initialText, onSave }: { path: string; in
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // Autosave ~1.2s after the last keystroke (mirrors the markdown/code editors).
+  const scheduleSave = useDebouncedAutosave(save);
 
   return (
     <div className="editor">
@@ -37,7 +40,7 @@ export function TextFileEditor({ path, initialText, onSave }: { path: string; in
         <button className="btn primary" onClick={save} disabled={saving} title="Ctrl+S">{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}</button>
       </div>
       {error && <div className="editor-error">{error}</div>}
-      <textarea value={content} onChange={(e) => setContent(e.target.value)} spellCheck={false} style={{ fontFamily: 'monospace' }} />
+      <textarea value={content} onChange={(e) => { setContent(e.target.value); scheduleSave(); }} spellCheck={false} style={{ fontFamily: 'monospace' }} />
     </div>
   );
 }

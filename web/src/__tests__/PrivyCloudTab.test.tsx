@@ -3,14 +3,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { PrivyCloudTab } from '../pages/PrivyCloudTab';
 import { api } from '../api';
 
-vi.mock('../ws', () => ({ connect: vi.fn(() => () => {}) }));
+const ws = vi.hoisted(() => ({ handlers: {} as Record<string, () => void> }));
+vi.mock('../ws', () => ({
+  connect: vi.fn((h: Record<string, () => void>) => { Object.assign(ws.handlers, h); return () => {}; }),
+}));
 
 const FIXTURE = [
-  { name: 'Images', path: 'Images', kind: 'folder', size: 0, isDir: true, modifiedAt: '' },
+  { name: 'Pictures', path: 'Pictures', kind: 'folder', size: 0, isDir: true, modifiedAt: '' },
   { name: 'Folders', path: 'Folders', kind: 'folder', size: 0, isDir: true, modifiedAt: '' },
-  { name: 'a.png', path: 'Images/a.png', kind: 'image', size: 1, isDir: false, modifiedAt: '' },
-  { name: 'sub', path: 'Images/sub', kind: 'folder', size: 0, isDir: true, modifiedAt: '' },
-  { name: 'deep.txt', path: 'Images/sub/deep.txt', kind: 'document', size: 1, isDir: false, modifiedAt: '' },
+  { name: 'a.png', path: 'Pictures/a.png', kind: 'image', size: 1, isDir: false, modifiedAt: '' },
+  { name: 'sub', path: 'Pictures/sub', kind: 'folder', size: 0, isDir: true, modifiedAt: '' },
+  { name: 'deep.txt', path: 'Pictures/sub/deep.txt', kind: 'document', size: 1, isDir: false, modifiedAt: '' },
 ];
 
 vi.mock('../api', () => ({
@@ -23,7 +26,7 @@ vi.mock('../api', () => ({
     sendFolder: vi.fn(() => Promise.resolve({})),
     getFileText: vi.fn(() => Promise.resolve('')),
     saveFileText: vi.fn(() => Promise.resolve({ ok: true })),
-    proxyUrl: (p: string) => p,
+    proxyUrl: (p: string) => `proxy:${p}`,
     fileUrl: (p: string) => p,
     getMeta: vi.fn(() => Promise.resolve({ root: '/tmp/x', owner: 'owner' })),
     listHermesRoles: vi.fn(() => Promise.resolve({ roles: [{ id: 'hermes', label: 'Hermes' }] })),
@@ -48,7 +51,7 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('shows the sidebar places: Home, Recent, Trash and the category folders', async () => {
     render(<PrivyCloudTab />);
-    await screen.findByTitle('Open Images'); // loaded
+    await screen.findByTitle('Open Pictures'); // loaded
     for (const label of ['Home', 'Recent', 'Trash', 'Documents', 'Pictures', 'Videos', 'Slides', 'Markdown', 'Folders', 'Other']) {
       expect(screen.getAllByRole('button', { name: new RegExp(label) }).length).toBeGreaterThan(0);
     }
@@ -56,14 +59,14 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('shows the category directories at the root (no nested files)', async () => {
     render(<PrivyCloudTab />);
-    expect(await screen.findByTitle('Open Images')).toBeInTheDocument();
+    expect(await screen.findByTitle('Open Pictures')).toBeInTheDocument();
     expect(screen.getByTitle('Open Folders')).toBeInTheDocument();
     expect(screen.queryByText('a.png')).toBeNull();
   });
 
   it('navigates into a folder when its tile is clicked', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(await screen.findByTitle('Open Pictures'));
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     expect(screen.getByTitle('Open sub')).toBeInTheDocument();
     expect(screen.queryByText('deep.txt')).toBeNull();
@@ -71,27 +74,27 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('navigates back to the root via the back button', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(await screen.findByTitle('Open Pictures'));
     fireEvent.click(screen.getByLabelText('back'));
-    expect(screen.getByTitle('Open Images')).toBeInTheDocument();
+    expect(screen.getByTitle('Open Pictures')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
   });
 
   it('goes forward after going back', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.doubleClick(await screen.findByTitle('Open Images')); // enter Images
+    fireEvent.doubleClick(await screen.findByTitle('Open Pictures')); // enter Pictures
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('back'));                // back to Home
-    expect(screen.getByTitle('Open Images')).toBeInTheDocument();
+    expect(screen.getByTitle('Open Pictures')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /a\.png/ })).toBeNull();
-    fireEvent.click(screen.getByLabelText('forward'));             // forward to Images
+    fireEvent.click(screen.getByLabelText('forward'));             // forward to Pictures
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
-    expect(screen.queryByTitle('Open Images')).toBeNull();
+    expect(screen.queryByTitle('Open Pictures')).toBeNull();
   });
 
   it('a sidebar category (Pictures) jumps into that folder', async () => {
     render(<PrivyCloudTab />);
-    await screen.findByTitle('Open Images');
+    await screen.findByTitle('Open Pictures');
     fireEvent.click(screen.getAllByRole('button', { name: /Pictures/ })[0]); // sidebar item
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
   });
@@ -99,7 +102,7 @@ describe('PrivyCloudTab file-system sharing', () => {
   it('Recent shows only files, newest-modified first', async () => {
     (api.listItems as ReturnType<typeof vi.fn>).mockResolvedValue([
       { name: 'old.txt', path: 'Documents/old.txt', kind: 'document', size: 1, isDir: false, modifiedAt: '2026-08-18' },
-      { name: 'new.png', path: 'Images/new.png', kind: 'image', size: 1, isDir: false, modifiedAt: '2026-08-20' },
+      { name: 'new.png', path: 'Pictures/new.png', kind: 'image', size: 1, isDir: false, modifiedAt: '2026-08-20' },
       { name: 'x', path: 'Folders/x', kind: 'folder', size: 0, isDir: true, modifiedAt: '2026-08-20' },
     ]);
     render(<PrivyCloudTab />);
@@ -111,13 +114,13 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('Trash lists trashed items with Restore and Delete-forever', async () => {
     (api.listTrash as ReturnType<typeof vi.fn>).mockResolvedValue({
-      items: [{ path: 'Images/gone.jpg', name: 'gone.jpg', isDir: false, size: 1, modifiedAt: '' }],
+      items: [{ path: 'Pictures/gone.jpg', name: 'gone.jpg', isDir: false, size: 1, modifiedAt: '' }],
     });
     render(<PrivyCloudTab />);
     fireEvent.click(await screen.findByRole('button', { name: /Trash/ }));
-    expect(await screen.findByText(/Images\/gone\.jpg/)).toBeInTheDocument();
+    expect(await screen.findByText(/Pictures\/gone\.jpg/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
-    expect(api.restoreFromTrash).toHaveBeenCalledWith('Images/gone.jpg');
+    expect(api.restoreFromTrash).toHaveBeenCalledWith('Pictures/gone.jpg');
   });
 
   it('renders chat oldest-first so the newest message is at the bottom', async () => {
@@ -148,18 +151,30 @@ describe('PrivyCloudTab file-system sharing', () => {
 
   it('opens a file in the viewer and keeps the chat visible', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(await screen.findByTitle('Open Pictures'));
     fireEvent.doubleClick(screen.getByRole('button', { name: /a\.png/ }));
-    expect(screen.getByText('← Back to sharing')).toBeInTheDocument();
+    expect(screen.getByTitle('Back to sharing')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
   });
 
   it('returns to the grid from the viewer, keeping the chat', async () => {
     render(<PrivyCloudTab />);
-    fireEvent.doubleClick(await screen.findByTitle('Open Images'));
+    fireEvent.doubleClick(await screen.findByTitle('Open Pictures'));
     fireEvent.doubleClick(screen.getByRole('button', { name: /a\.png/ }));
-    fireEvent.click(screen.getByText('← Back to sharing'));
+    fireEvent.click(screen.getByTitle('Back to sharing'));
     expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Send message, file, folder/)).toBeInTheDocument();
+  });
+
+  it('Escape in the editor closes the viewer but does not also walk the grid up a directory', async () => {
+    render(<PrivyCloudTab />);
+    fireEvent.doubleClick(await screen.findByTitle('Open Pictures')); // Home → Pictures (history pushed)
+    fireEvent.doubleClick(screen.getByRole('button', { name: /a\.png/ })); // open the file
+    expect(screen.getByTitle('Back to sharing')).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' }); // one keypress: close the viewer
+    expect(screen.queryByTitle('Back to sharing')).toBeNull(); // viewer closed…
+    // …and the grid stays on Pictures (a.png still listed), NOT popped back to Home.
+    expect(screen.getByRole('button', { name: /a\.png/ })).toBeInTheDocument();
+    expect(screen.queryByTitle('Open Pictures')).toBeNull(); // "Open Pictures" only appears at Home
   });
 });

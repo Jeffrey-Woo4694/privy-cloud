@@ -17,10 +17,10 @@ export function locationKey(loc: Location): string {
 
 export interface Place { id: string; label: string; icon: IconName; location: Location }
 
-/** The real category folders shown in the sidebar (Pictures maps to the Images folder). */
+/** The real category folders shown in the sidebar (each label matches its folder name on disk). */
 export const CATEGORY_PLACES: Place[] = [
   { id: 'Documents', label: 'Documents', icon: 'document', location: { type: 'folder', path: 'Documents' } },
-  { id: 'Pictures',  label: 'Pictures',  icon: 'image',    location: { type: 'folder', path: 'Images' } },
+  { id: 'Pictures',  label: 'Pictures',  icon: 'image',    location: { type: 'folder', path: 'Pictures' } },
   { id: 'Videos',    label: 'Videos',    icon: 'video',    location: { type: 'folder', path: 'Videos' } },
   { id: 'Slides',    label: 'Slides',    icon: 'slide',    location: { type: 'folder', path: 'Slides' } },
   { id: 'Markdown',  label: 'Markdown',  icon: 'markdown', location: { type: 'folder', path: 'Markdown' } },
@@ -28,11 +28,9 @@ export const CATEGORY_PLACES: Place[] = [
   { id: 'Other',     label: 'Other',     icon: 'other',    location: { type: 'folder', path: 'Other' } },
 ];
 
-const CATEGORY_DISPLAY: Record<string, string> = { Images: 'Pictures' };
-
-/** Display label for a folder path segment in the breadcrumb. */
+/** Display label for a folder path segment in the breadcrumb (categories are named identically on disk). */
 export function folderLabel(path: string): string {
-  return CATEGORY_DISPLAY[path] ?? path.split('/').pop() ?? path;
+  return path.split('/').pop() ?? path;
 }
 
 /** Breadcrumb segments for a location: Home ▸ Pictures ▸ sub. */

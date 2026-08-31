@@ -8,7 +8,7 @@ describe('api', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('listItems hits /api/items and returns typed items', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(ok([{ name: 'a.png', path: 'Images/a.png', kind: 'image', size: 1, isDir: false, modifiedAt: 'x' }]));
+    const fetchMock = vi.fn().mockResolvedValue(ok([{ name: 'a.png', path: 'Pictures/a.png', kind: 'image', size: 1, isDir: false, modifiedAt: 'x' }]));
     vi.stubGlobal('fetch', fetchMock);
     const { api } = await import('../api');
     const items = await api.listItems();

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDebouncedAutosave } from '../useDebouncedAutosave';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView } from '@codemirror/view';
 import { HighlightStyle, syntaxHighlighting, type LanguageSupport } from '@codemirror/language';
@@ -94,12 +95,9 @@ export function CodeEditor({ path, value, ext, onSave }: { path: string; value: 
   }, []);
 
   // Autosave ~1.2s after the last keystroke; each save is backed up server-side.
-  const autosaveTimer = useRef<number | null>(null);
-  useEffect(() => () => { if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current); }, []);
-  const scheduleAutosave = () => {
-    if (autosaveTimer.current) window.clearTimeout(autosaveTimer.current);
-    autosaveTimer.current = window.setTimeout(() => saveRef.current(), 1200);
-  };
+  // Pending edits also flush if the editor unmounts mid-debounce (e.g. Esc closes
+  // the viewer), so a keystroke is never lost.
+  const scheduleAutosave = useDebouncedAutosave(save);
 
   return (
     <div className="editor">

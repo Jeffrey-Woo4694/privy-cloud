@@ -22,3 +22,14 @@ export function directChildren(items: FileItem[], currentPath: string, kind: Kin
     return kind === 'all' || i.kind === kind;
   });
 }
+
+/**
+ * Re-resolve the open viewer's item against freshly-listed items so live flags
+ * (proxyPending/hasProxy after a transcode, modifiedAt, size) update the editor
+ * while it is open. If the path isn't in `items` — hidden, or a chat-card item
+ * synthesized by openFile — the previous object is kept untouched.
+ */
+export function syncSelected<T extends { path: string }>(selected: T | null, items: T[]): T | null {
+  if (!selected) return null;
+  return items.find((i) => i.path === selected.path) ?? selected;
+}

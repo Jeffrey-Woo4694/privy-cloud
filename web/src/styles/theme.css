@@ -226,6 +226,22 @@ button { font: inherit; cursor: pointer; }
 .sidebar-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
 .sidebar-icon svg { width: 100%; height: 100%; }
 .sidebar-divider { height: 1px; background: transparent; margin: 8px 6px; }
+/* Quick-access bookmark rail: folders dragged in from the grid. Rows reorder by
+   drag with a glowing insertion line at the hovered gap ("fluid glass" feel); the
+   zone lights up while a grid folder hovers over it. */
+.sidebar-section-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 2px 10px 4px; }
+.bookmark-zone { display: flex; flex-direction: column; gap: 2px; border-radius: 10px; transition: background .15s, box-shadow .15s; }
+.bookmark-zone.accepting { background: var(--chipbg); box-shadow: inset 0 0 0 1.5px var(--focus-blue); }
+.bookmark-empty { padding: 8px 10px; border: 1.5px dashed var(--glass-border); border-radius: 10px; color: var(--muted); font-size: 12px; text-align: center; }
+.bookmark-row { position: relative; user-select: none; cursor: grab; transition: background .15s, transform .18s cubic-bezier(.2, .8, .3, 1), opacity .15s; }
+.bookmark-row:active { cursor: grabbing; }
+.bookmark-row.gap-before::before, .bookmark-row.gap-after::after {
+  content: ''; position: absolute; left: 4px; right: 4px; height: 2px; border-radius: 2px;
+  background: var(--focus-blue); box-shadow: 0 0 8px var(--focus-blue); pointer-events: none;
+}
+.bookmark-row.gap-before::before { top: -2px; }
+.bookmark-row.gap-after::after { bottom: -2px; }
+.bookmark-rename-input { flex: 1; min-width: 0; background: var(--inputbg); border: 1px solid var(--focus-blue); border-radius: 6px; color: var(--text); font-size: 13px; padding: 2px 6px; outline: none; }
 .path-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* Back/forward — a single soft pill holding the two buttons (no hairline divider).
    Disabled buttons keep the group's shape. */
@@ -299,6 +315,11 @@ button { font: inherit; cursor: pointer; }
 /* Expanded editor: cover the whole interface (top tab bar + left sharing panel +
    right chat panel) with a fixed, full-viewport theme-colored layer. */
 .viewer-fullscreen { position: fixed; inset: 0; z-index: 1002; background: var(--bg); padding: 8px 12px; }
+/* In the desktop shell the fullscreen editor must not spill past the glass pane's
+   rounded silhouette (the transparent window shows the desktop through the corners).
+   Sit inside the pane's 1px hairline and follow its curve concentrically: the inner
+   arc of a 22px radius offset by 1px is 21px. Browser viewports keep square edges. */
+html.tauri-shell .viewer-fullscreen { inset: 1px; border-radius: 21px; }
 .viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--inputbg); border: none; border-radius: 12px; overflow: auto; }
 .viewer-body img, .viewer-body video { max-width: 100%; max-height: 100%; }
 .placeholder-page { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; color: var(--muted); }
