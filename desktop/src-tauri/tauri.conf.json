@@ -9,6 +9,6 @@
     "beforeBuildCommand": "cd .. && npm run build -w web",
     "frontendDist": "../../web/dist"
   },
-  "app": { "windows": [{ "title": "Privy Cloud", "width": 1280, "height": 800, "minWidth": 960, "minHeight": 600, "transparent": true, "decorations": false }], "security": { "csp": null } },
+  "app": { "windows": [{ "title": "Privy Cloud", "width": 1180, "height": 720, "minWidth": 960, "minHeight": 600, "center": true, "transparent": true, "decorations": false }], "security": { "csp": null } },
   "bundle": { "active": true, "targets": "all", "icon": ["icons/icon.png"] }
 }

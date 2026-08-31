@@ -37,6 +37,17 @@ fn spawn_backend() -> Option<Child> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // One shell only, like a native app: a second launch (D-Bus NameTaken)
+        // notifies the already-running instance, which brings its window forward
+        // (restoring it if minimized) and then this new process exits — so clicking
+        // the icon never piles up extra windows or duplicate backends.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.unminimize();
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
         .setup(|_app| {
             if !backend_alive() {
                 if let Some(child) = spawn_backend() {
