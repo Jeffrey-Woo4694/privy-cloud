@@ -70,6 +70,55 @@ describe('api', () => {
     await app.close();
   });
 
+  it('serves byte ranges (206) so WebKit media replay works', async () => {
+    const app = await boot();
+    const data = Buffer.alloc(100);
+    for (let i = 0; i < 100; i++) data[i] = i;
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'clip.dat'), data);
+    const url = '/api/file?path=Documents%2Fclip.dat';
+
+    // No Range → full body, advertising range support.
+    const full = await app.inject({ method: 'GET', url, headers: AUTH });
+    expect(full.statusCode).toBe(200);
+    expect(full.headers['accept-ranges']).toBe('bytes');
+    expect(Number(full.headers['content-length'])).toBe(100);
+
+    // Middle slice.
+    const mid = await app.inject({ method: 'GET', url, headers: { ...AUTH, range: 'bytes=10-19' } });
+    expect(mid.statusCode).toBe(206);
+    expect(mid.headers['content-range']).toBe('bytes 10-19/100');
+    expect([...mid.rawPayload]).toEqual([...data.subarray(10, 20)]);
+
+    // Open-ended tail slice (a replay from a seek point looks like this).
+    const open = await app.inject({ method: 'GET', url, headers: { ...AUTH, range: 'bytes=90-' } });
+    expect(open.statusCode).toBe(206);
+    expect(open.headers['content-range']).toBe('bytes 90-99/100');
+    expect([...open.rawPayload]).toEqual([...data.subarray(90)]);
+
+    // Suffix slice (last N bytes).
+    const suffix = await app.inject({ method: 'GET', url, headers: { ...AUTH, range: 'bytes=-5' } });
+    expect(suffix.statusCode).toBe(206);
+    expect(suffix.headers['content-range']).toBe('bytes 95-99/100');
+    expect([...suffix.rawPayload]).toEqual([...data.subarray(95)]);
+
+    // Unsatisfiable → 416 with total size.
+    const unsat = await app.inject({ method: 'GET', url, headers: { ...AUTH, range: 'bytes=200-' } });
+    expect(unsat.statusCode).toBe(416);
+    expect(unsat.headers['content-range']).toBe('bytes */100');
+
+    // Malformed Range → ignored (serve full, never error the client).
+    const junk = await app.inject({ method: 'GET', url, headers: { ...AUTH, range: 'bytes=abc' } });
+    expect(junk.statusCode).toBe(200);
+
+    // Proxy route honors ranges too (proxy file = .privy/proxies/<rel>.mp4).
+    mkdirSync(join(root, 'Privy Cloud', '.privy', 'proxies', 'Videos'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', '.privy', 'proxies', 'Videos', 'clip.mov.mp4'), data);
+    const p = await app.inject({ method: 'GET', url: '/api/proxy?path=Videos%2Fclip.mov', headers: { ...AUTH, range: 'bytes=0-9' } });
+    expect([p.statusCode, p.headers['content-range']]).toEqual([206, 'bytes 0-9/100']);
+    await app.close();
+  });
+
   it('PUT /api/file edits any text extension and rejects binaries', async () => {
     const app = await boot();
     mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
@@ -167,7 +216,7 @@ describe('api', () => {
     });
     expect(res.statusCode).toBe(200);
     const entry = res.json().entry as { path: string };
-    expect(entry.path).toMatch(/^Images\//);
+    expect(entry.path).toMatch(/^Pictures\//);
     const stored = readFileSync(join(root, 'Privy Cloud', entry.path));
     expect(stored.length).toBe(SIZE);
     expect(stored.equals(body)).toBe(true);

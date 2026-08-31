@@ -1,10 +1,10 @@
-import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import type { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { ChatEntry } from '@privy/shared';
 import { listItems, resolveSafe, initRootStructure, privyBase, proxyPathFor } from '../directory.js';
 import { storeText, storeFile, stageFolderUpload, createDirectory, createFile, renameItem, uploadInto, copyInto, moveItems } from '../storage.js';
@@ -64,6 +64,43 @@ function privyResolve(ctx: ApiContext, rel: string): string | null {
 function mimeFor(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   return MIME[ext] ?? 'application/octet-stream';
+}
+
+// Byte-range file streaming (RFC 7233, single ranges). The desktop shell's media
+// element (WebKitGTK) re-fetches with a `Range` header when replaying a finished
+// video — answering that with a plain 200 fails its pipeline and the viewer shows
+// "Preview unavailable". So /api/file and /api/proxy honor ranges.
+type ByteRange = { start: number; end: number } | 'full' | 'unsatisfiable';
+function parseByteRange(header: string | undefined, size: number): ByteRange {
+  if (!header) return 'full';
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m || (m[1] === '' && m[2] === '')) return 'full'; // malformed/multi → ignore, serve whole
+  if (m[1] === '') { // suffix: "bytes=-N" → last N bytes
+    const n = Math.min(Number(m[2]), size);
+    return n > 0 ? { start: size - n, end: size - 1 } : 'full';
+  }
+  const start = Number(m[1]);
+  if (start >= size) return 'unsatisfiable';
+  const end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+  return { start, end };
+}
+
+function streamFile(req: FastifyRequest, reply: FastifyReply, abs: string, type: string) {
+  const { size } = statSync(abs);
+  reply.type(type).header('accept-ranges', 'bytes');
+  const range = parseByteRange(req.headers.range, size);
+  if (range === 'unsatisfiable') {
+    // Plain string: the content-type is already the file's (fastify refuses to JSON-serialize there).
+    return reply.code(416).header('content-range', `bytes */${size}`).send('range not satisfiable');
+  }
+  if (range === 'full') {
+    return reply.header('content-length', String(size)).send(createReadStream(abs));
+  }
+  return reply
+    .code(206)
+    .header('content-range', `bytes ${range.start}-${range.end}/${size}`)
+    .header('content-length', String(range.end - range.start + 1))
+    .send(createReadStream(abs, { start: range.start, end: range.end }));
 }
 
 export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Promise<void> {
@@ -200,7 +237,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     const abs = privyResolve(ctx, rel);
     if (!abs) return reply.code(400).send({ error: 'unsafe path' });
     const name = rel.split('/').pop() ?? '';
-    return reply.type(mimeFor(name)).send(createReadStream(abs));
+    return streamFile(req, reply, abs, mimeFor(name));
   });
 
   // Playable proxy for a video (HEVC→H.264) or image (HEIC→JPEG) whose original isn't
@@ -212,7 +249,7 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     if (kind !== 'video' && kind !== 'image') return reply.code(404).send({ error: 'not a media file' });
     const proxy = proxyPathFor(ctx.getRoot(), rel, kind);
     if (!existsSync(proxy)) return reply.code(404).send({ error: 'proxy not ready' });
-    return reply.type(kind === 'video' ? 'video/mp4' : 'image/jpeg').send(createReadStream(proxy));
+    return streamFile(req, reply, proxy, kind === 'video' ? 'video/mp4' : 'image/jpeg');
   });
 
   app.put('/api/file', async (req, reply) => {
