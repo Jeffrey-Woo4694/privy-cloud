@@ -28,20 +28,72 @@ const vidProxy: FileItem = { ...vid, hasProxy: true };
 
 describe('FileViewer', () => {
   beforeEach(() => localStorage.clear());
-  it('renders a markdown preview, then edits it after clicking Edit', async () => {
+  // The top bar's right side is one ▾ popover (like the sharing page's Create
+  // button); tests open it to reach Download / Expand / Trash rows.
+  const openActions = () => fireEvent.click(screen.getByRole('button', { name: /file actions/i }));
+
+  it('renders a markdown design by default, edits the raw text, and shows the update', async () => {
     (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('# hi');
     const onSaved = vi.fn();
-    render(<FileViewer item={md} onBack={vi.fn()} onSaved={onSaved} />);
-    // Rendered preview shows the formatted heading by default.
-    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('hi'));
-    // Switch to the raw editor, then edit + save.
-    fireEvent.click(screen.getByRole('button', { name: /edit as markdown/i }));
-    await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue('# hi'));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: '# bye' } });
+    const { container } = render(<FileViewer item={md} onBack={vi.fn()} onSaved={onSaved} />);
+    // The formatted design is the first face: a heading, and no textarea yet.
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('hi'), { timeout: 4000 });
+    expect(container.querySelector('textarea')).toBeNull();
+    // The single Edit/Show button swaps faces; its label flips.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const area = await waitFor(() => container.querySelector('textarea')!);
+    expect(area).toHaveValue('# hi');
+    fireEvent.change(area, { target: { value: '# bye' } });
     fireEvent.click(screen.getByText('Save'));
     await waitFor(() => expect(api.saveFileText).toHaveBeenCalledWith('Markdown/n.md', '# bye'));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    // Back to the design, now reflecting the edit.
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }));
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('bye'), { timeout: 4000 });
   });
+
+  it('truncates a long top-bar name middle-out, keeping the file type', async () => {
+    (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('hi');
+    const long: FileItem = { ...md, name: 'message-from-iphone-20260831-231803.md', path: 'Markdown/message-from-iphone-20260831-231803.md' };
+    render(<FileViewer item={long} onBack={vi.fn()} onSaved={vi.fn()} />);
+    const barName = document.querySelector('.viewer-bar-name')!;
+    expect(barName.getAttribute('title')).toBe(long.name); // full name still available (tooltip)
+    expect(barName.textContent!.length).toBeLessThanOrEqual(32);
+    expect(barName.textContent).toContain('…');
+    expect(barName.textContent).toMatch(/…md$/); // the type survives the truncation
+  });
+
+  it('the actions popover offers Download for any file, not just media', async () => {
+    (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('# hi');
+    render(<FileViewer item={md} onBack={vi.fn()} onSaved={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument(), { timeout: 4000 });
+    openActions();
+    const dl = screen.getByRole('menuitem', { name: /download/i });
+    expect(dl.getAttribute('href')).toContain('/api/file?path=Markdown%2Fn.md');
+    expect(dl.getAttribute('download')).toBe('n.md');
+  });
+
+  it('renaming via the editor name field asks the parent to move the file', async () => {
+    (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('# hi');
+    const onRename = vi.fn().mockResolvedValue({ path: 'Markdown/renamed.md' });
+    render(<FileViewer item={md} onBack={vi.fn()} onSaved={vi.fn()} onRename={onRename} />);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument(), { timeout: 4000 });
+    const nameField = screen.getByLabelText('File name');
+    fireEvent.change(nameField, { target: { value: 'renamed.md' } });
+    fireEvent.keyDown(nameField, { key: 'Enter' });
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith('Markdown/n.md', 'renamed.md'));
+  });
+
+  it('Escape closes the open actions popover before it closes anything else', () => {
+    const onBack = vi.fn();
+    render(<FileViewer item={img} onBack={onBack} onSaved={vi.fn()} />);
+    openActions();
+    expect(screen.getByRole('menuitem', { name: /download/i })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('menuitem')).toBeNull(); // popover shut…
+    expect(onBack).not.toHaveBeenCalled(); // …viewer untouched
+  });
+
 
   it('renders an image with the file URL', () => {
     render(<FileViewer item={img} onBack={vi.fn()} onSaved={vi.fn()} />);
@@ -75,28 +127,30 @@ describe('FileViewer', () => {
     expect(screen.getByTestId('audio')).toBeTruthy();
   });
 
-  it('shows an Expand button for an office item and toggles fullscreen', () => {
+  it('the actions menu expands an office item to fullscreen and back', () => {
     const { container } = render(<FileViewer item={docx} onBack={vi.fn()} onSaved={vi.fn()} />);
     const viewer = container.querySelector('.viewer') as HTMLElement;
     expect(viewer.className).not.toContain('viewer-fullscreen');
-    expect(screen.getByRole('button', { name: /expand/i })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: /expand/i }));
+    openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: /^expand$/i }));
     expect(viewer.className).toContain('viewer-fullscreen');
-
-    fireEvent.click(screen.getByRole('button', { name: /fullscreen/i }));
+    openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: /exit fullscreen/i }));
     expect(viewer.className).not.toContain('viewer-fullscreen');
   });
 
-  it('shows an Expand button for a markdown item (editable view)', () => {
+  it('the actions menu offers Expand for a markdown item (editable view)', async () => {
     (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('# hi');
     render(<FileViewer item={md} onBack={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /expand/i })).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument(), { timeout: 4000 });
+    openActions();
+    expect(screen.getByRole('menuitem', { name: /^expand$/i })).toBeTruthy();
   });
 
-  it('shows an Expand button for every view, including media (image)', () => {
+  it('the actions menu offers Expand for every view, including media (image)', () => {
     render(<FileViewer item={img} onBack={vi.fn()} onSaved={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /expand/i })).toBeTruthy();
+    openActions();
+    expect(screen.getByRole('menuitem', { name: /^expand$/i })).toBeTruthy();
   });
 
   it('F2 toggles fullscreen (expand then exit) and Esc exits', () => {
@@ -121,9 +175,9 @@ describe('FileViewer', () => {
     const viewer = container.querySelector('.viewer') as HTMLElement;
     fireEvent.keyDown(window, { key: 'F2' });
     expect(viewer.className).toContain('viewer-fullscreen');
-    // The button now reads as Exit fullscreen and the toggle still works.
-    expect(screen.getByRole('button', { name: /fullscreen/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /fullscreen/i }));
+    // The menu now offers Exit fullscreen and the toggle still works.
+    openActions();
+    fireEvent.click(screen.getByRole('menuitem', { name: /exit fullscreen/i }));
     expect(viewer.className).not.toContain('viewer-fullscreen');
   });
 
@@ -143,9 +197,9 @@ describe('FileViewer', () => {
   it('Esc inside the editing surface closes the file back to its folder (autosave keeps the edit)', async () => {
     (api.getFileText as ReturnType<typeof vi.fn>).mockResolvedValue('# hi');
     const onBack = vi.fn();
-    render(<FileViewer item={md} onBack={onBack} onSaved={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: /edit as markdown/i }));
-    const box = await screen.findByRole('textbox');
+    const { container } = render(<FileViewer item={md} onBack={onBack} onSaved={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const box = (await waitFor(() => container.querySelector('textarea')!)) as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: '# changed' } });
     fireEvent.keyDown(box, { key: 'Escape' }); // focus was inside the editor textarea
     expect(onBack).toHaveBeenCalled();

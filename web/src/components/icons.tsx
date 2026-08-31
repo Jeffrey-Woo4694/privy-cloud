@@ -50,7 +50,7 @@ export type IconName =
   | 'markdown' | 'folder' | 'other'
   | 'home' | 'recent' | 'trash' | 'user' | 'bot' | 'text' | 'paperclip'
   | 'folderPlus' | 'filePlus' | 'eye' | 'download' | 'pencil' | 'undo' | 'link' | 'chevronDown'
-  | 'back' | 'star' | 'starFilled';
+  | 'back' | 'star' | 'starFilled' | 'expand' | 'compress';
 
 /* Repeated geometry shared by more than one name. */
 const pencil = (<><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></>);
@@ -85,6 +85,9 @@ const PATHS: Record<IconName, ReactNode> = {
   undo: (<><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></>),
   link: (<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>),
   chevronDown: (<path d="m6 9 6 6 6-6" />),
+  // Fullscreen toggle (viewer actions menu): corner brackets out (maximize) / in (minimize).
+  expand: (<><path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" /><path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" /></>),
+  compress: (<><path d="M8 3v3a2 2 0 0 1-2 2H3" /><path d="M21 8h-3a2 2 0 0 1-2-2V3" /><path d="M3 16h3a2 2 0 0 1 2 2v3" /><path d="M16 21v-3a2 2 0 0 1 2-2h3" /></>),
   // Navigation / bookmarks.
   back: (<><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></>),
   star: (<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />),

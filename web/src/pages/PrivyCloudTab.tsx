@@ -363,6 +363,20 @@ export function PrivyCloudTab() {
   };
   const cancelRename = useCallback(() => setRenaming(null), []);
 
+  // Rename from inside an open file (the editor's name field): move it on disk,
+  // repoint the open viewer at the new path so its bar and editors keep the
+  // right name, and refresh the listings. Throws back to the caller (the field
+  // reverts the edit) after surfacing the error toast.
+  const viewerRename = async (path: string, newName: string) => {
+    try {
+      const res = await api.rename(path, newName);
+      setSelected((s) => (s && s.path === path
+        ? { ...s, path: res.path, name: res.path.split('/').pop() ?? newName }
+        : s));
+      void refresh();
+    } catch (e) { setError((e as Error).message); throw e; }
+  };
+
   // Sidebar bookmarks: a dropped folder becomes a quick-access entry (only real
   // directories, deduped by path); reorder persists the drag order; "Remove" drops
   // just the bookmark; "Rename" renames the actual directory on disk and repoints
@@ -488,7 +502,7 @@ export function PrivyCloudTab() {
     return (
       <div style={{ display: 'flex', gap: 12, padding: 12, width: '100%', height: '100%', minWidth: 0 }}>
         <div className="panel" style={{ flex: 1, padding: 12, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} onTrash={trashFile} onRefreshItems={refresh} />
+          <FileViewer item={selected} onBack={() => setSelected(null)} onSaved={onSaved} onTrash={trashFile} onRename={viewerRename} onRefreshItems={refresh} />
         </div>
         {!isMobile && rightPanel}
         {error && <div className="toast">{error}</div>}

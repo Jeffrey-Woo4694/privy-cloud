@@ -1,43 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
-import { useDebouncedAutosave } from '../useDebouncedAutosave';
+import { useEffect, useState } from 'react';
+import { FileNameInput } from './FileNameInput';
+import { useEditorSave } from '../useEditorSave';
 
-export function TextFileEditor({ path, initialText, onSave }: { path: string; initialText: string; onSave: (c: string) => Promise<void> }) {
+/** Plain-text editor: head row with an editable name, a fixed "Save" button, and
+ *  ghost status text beside it (the save reaction — "Saving…"/"Saved" — never
+ *  changes the button itself). Autosaves ~1.2s after the last keystroke. */
+export function TextFileEditor({ name, initialText, onSave, onRename }: {
+  name: string; initialText: string;
+  onSave: (c: string) => Promise<void>;
+  onRename?: (newName: string) => Promise<void>;
+}) {
   const [content, setContent] = useState(initialText);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const { save, scheduleSave, markSaved, saving, status, error, dirty } = useEditorSave(content, onSave);
 
   // Re-sync when async-loaded text arrives: the parent fetches text on mount, so
   // initialText is '' on the first render, then fills in — the editor must pick it
   // up. A dependency on `initialText` only refires when the value actually changes
   // (the parent's `text` state is set once, not on every keystroke), so this never
-  // clobbers in-progress typing.
-  useEffect(() => { setContent(initialText); }, [initialText]);
+  // clobbers in-progress typing. Adopting it as "saved" keeps the dedupe honest.
+  useEffect(() => { setContent(initialText); markSaved(initialText); }, [initialText]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = async () => {
-    if (saving) return;
-    setSaving(true); setError('');
-    try { await onSave(content); setSaved(true); setTimeout(() => setSaved(false), 1500); }
-    catch (e) { setError((e as Error).message || 'Save failed'); }
-    finally { setSaving(false); }
+  // Rename the file on disk: flush any unsaved edit first (under the old path),
+  // then hand the new name to the parent — so the move never races the write.
+  const commitRename = async (newName: string) => {
+    if (dirty) await save();
+    await onRename?.(newName);
   };
-  const saveRef = useRef(save);
-  useEffect(() => { saveRef.current = save; });
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.shiftKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveRef.current(); }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-  // Autosave ~1.2s after the last keystroke (mirrors the markdown/code editors).
-  const scheduleSave = useDebouncedAutosave(save);
 
   return (
     <div className="editor">
       <div className="editor-title">
-        <span>{path}</span>
-        <button className="btn primary" onClick={save} disabled={saving} title="Ctrl+S">{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}</button>
+        <FileNameInput name={name} onRename={onRename ? commitRename : undefined} />
+        <span className="save-ghost" aria-live="polite">{status}</span>
+        <button className="btn primary" onClick={() => void save()} disabled={saving} title="Ctrl+S">Save</button>
       </div>
       {error && <div className="editor-error">{error}</div>}
       <textarea value={content} onChange={(e) => { setContent(e.target.value); scheduleSave(); }} spellCheck={false} style={{ fontFamily: 'monospace' }} />

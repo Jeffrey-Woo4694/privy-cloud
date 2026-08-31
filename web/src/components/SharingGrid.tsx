@@ -1,31 +1,9 @@
 import { useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import type { FileItem } from '@privy/shared';
 import { api } from '../api';
+import { truncatedName } from '../fileDisplay';
 import { FolderIcon, FilePageIcon } from './icons';
 import { useItemInteraction } from '../useItemInteraction';
-
-/** A tile name is capped at 3 lines by the CSS -webkit-line-clamp. Keep the
-    truncation ending with the file type so a long name reads "…word.md" instead of
-    cutting the type off. The "…" already carries the trailing punctuation, so the
-    suffix is the bare type (no dot).
-    The budget must fit within the real 3-line box. At the default tile width the
-    content box is ~96px and each line holds ~11-14 chars, so keeping the total
-    (base + "…" + type) under ~32 chars guarantees the type survives the clamp. A
-    larger budget once produced a string that wrapped to a 4th line and got clipped,
-    hiding the extension. */
-function displayName(name: string, isDir: boolean): string {
-  // Hidden files (".gitignore") and directories have no trailing type.
-  const dot = name.lastIndexOf('.');
-  const hasType = !isDir && dot > 0;
-  const type = hasType ? name.slice(dot + 1) : ''; // "md" — no leading dot
-  const base = hasType ? name.slice(0, dot) : name;
-  const MAX = 32; // total chars that reliably fit the 3-line clamp (see above)
-  if (name.length > MAX) {
-    const cap = Math.max(MAX - type.length - 1, 0); // leave room for "…" + type
-    return base.slice(0, cap) + '…' + type;
-  }
-  return name;
-}
 
 /** Images get a real thumbnail (HEIC via its proxy, JPEG/PNG via the file URL). */
 const thumbUrl = (item: FileItem): string => (item.hasProxy ? api.proxyUrl(item.path) : api.fileUrl(item.path));
@@ -77,7 +55,7 @@ export function SharingGrid({ items, onSelect, onOpen, selected, singleClickOpen
               ? <RenameInput item={item} onCommit={(v) => onCommitRename?.(item, v)} onCancel={() => onCancelRename?.()} />
               : (
                 <>
-                  <div className="tile-name">{displayName(item.name, item.isDir)}</div>
+                  <div className="tile-name">{truncatedName(item.name, item.isDir)}</div>
                 </>
               )}
           </>

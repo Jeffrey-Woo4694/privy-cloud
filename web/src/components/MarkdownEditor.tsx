@@ -1,66 +1,53 @@
-import { useEffect, useRef, useState } from 'react';
-import { useDebouncedAutosave } from '../useDebouncedAutosave';
+import { useEffect, useState } from 'react';
+import { Markdown } from './Markdown';
+import { FileNameInput } from './FileNameInput';
+import { useEditorSave } from '../useEditorSave';
 
-export function MarkdownEditor({ path, initialText, onSave }: { path: string; initialText: string; onSave: (c: string) => Promise<void> }) {
+/** Markdown file surface — one component for both faces of the file. It opens on
+ *  the rendered design; the head row's single Edit/Show button swaps the body
+ *  between the formatted view and the raw markdown source (the button's label is
+ *  all that changes — its size stays still, so the row never shifts). The head
+ *  matches the plain-text editor: editable file name (no parent directory), a
+ *  fixed "Save" button, and ghost status text beside it for the save reaction.
+ *  Raw edits autosave ~1.2s after the last keystroke; unmount flushes a pending
+ *  edit, so switching to Show (or Esc) never drops work. */
+export function MarkdownEditor({ name, initialText, onSave, onRename }: {
+  name: string; initialText: string;
+  onSave: (c: string) => Promise<void>;
+  onRename?: (newName: string) => Promise<void>;
+}) {
   const [content, setContent] = useState(initialText);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false); // false = rendered design, true = raw source
+  const { save, scheduleSave, markSaved, saving, status, error, dirty } = useEditorSave(content, onSave);
 
-  useEffect(() => setContent(initialText), [path, initialText]);
+  // Same async-load re-sync as TextFileEditor: pick up text that lands after
+  // mount, and treat it as the saved baseline.
+  useEffect(() => { setContent(initialText); markSaved(initialText); }, [initialText]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const save = async () => {
-    if (saving) return; // ignore repeats (button is disabled while saving; shortcut too)
-    setSaving(true);
-    setError('');
-    try {
-      await onSave(content);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-    } catch (e) {
-      setError((e as Error).message || 'Save failed');
-    } finally {
-      setSaving(false);
-    }
+  // Flush a pending edit under the old path before the move, so a rename can't
+  // race (or lose) the autosave.
+  const commitRename = async (newName: string) => {
+    if (dirty) await save();
+    await onRename?.(newName);
   };
-
-  // Keep the latest save in a ref so the Ctrl+S listener below always calls the
-  // current closure (with the freshest content), without re-attaching per render.
-  const saveRef = useRef(save);
-  useEffect(() => { saveRef.current = save; });
-
-  // Autosave: save ~1.2s after the last keystroke. Each save is backed up server-side
-  // (bounded version history), so autosaving never destroys the prior content. The
-  // timer is reset on every change, so a continuous typing burst saves once it pauses;
-  // a pending edit also flushes if the editor unmounts mid-debounce (Esc closes).
-  const scheduleSave = useDebouncedAutosave(save);
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setContent(e.target.value);
-    scheduleSave();
-  };
-
-  // Ctrl+S / Cmd+S saves the file and prevents the browser's default "Save Page".
-  // Attached at the window so it works wherever focus is inside the editor, and
-  // removed on unmount so it never leaks beyond this view.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.shiftKey && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        saveRef.current();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   return (
     <div className="editor">
       <div className="editor-title">
-        <span>{path}</span>
-        <button className="btn primary" onClick={save} disabled={saving} title="Ctrl+S">{saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}</button>
+        <button type="button" className="btn md-toggle" onClick={() => setEditing((v) => !v)} aria-pressed={editing}
+          title={editing ? 'Show the rendered markdown' : 'Edit the raw markdown'}>
+          {editing ? 'Show' : 'Edit'}
+        </button>
+        <FileNameInput name={name} onRename={onRename ? commitRename : undefined} />
+        <span className="save-ghost" aria-live="polite">{status}</span>
+        <button className="btn primary" onClick={() => void save()} disabled={saving} title="Ctrl+S">Save</button>
       </div>
       {error && <div className="editor-error">{error}</div>}
-      <textarea value={content} onChange={handleChange} spellCheck={false} />
+      {editing ? (
+        <textarea value={content} onChange={(e) => { setContent(e.target.value); scheduleSave(); }} spellCheck={false} />
+      ) : (
+        <div className="markdown md-body"><Markdown>{content}</Markdown></div>
+      )}
     </div>
   );
 }

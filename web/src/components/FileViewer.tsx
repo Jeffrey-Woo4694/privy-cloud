@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import type { FileItem } from '@privy/shared';
 import { api, API_BASE } from '../api';
 import { getToken } from '../auth';
+import { truncatedName } from '../fileDisplay';
 import { editorFor } from '../fileEditor';
 import { ShapeIcon } from './icons';
 import { DocEditor } from './DocEditor';
 import { MarkdownEditor } from './MarkdownEditor';
-import { MarkdownViewer } from './MarkdownViewer';
 import { TextFileEditor } from './TextFileEditor';
 import { StructuredViewer } from './StructuredViewer';
 import { CsvEditor } from './CsvEditor';
@@ -16,7 +16,7 @@ import { ArchiveInfo } from './ArchiveInfo';
 
 // Every view can be expanded to fill the whole interface (not just the small
 // sharing panel): editors, media, and read-only previews alike.
-export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: { item: FileItem; onBack(): void; onSaved(): void; onTrash?: (path: string) => void; onRefreshItems?: () => void }) {
+export function FileViewer({ item, onBack, onSaved, onTrash, onRename, onRefreshItems }: { item: FileItem; onBack(): void; onSaved(): void; onTrash?: (path: string) => void; onRename?: (path: string, newName: string) => Promise<void>; onRefreshItems?: () => void }) {
   const url = `${API_BASE}/api/file?path=${encodeURIComponent(item.path)}&token=${encodeURIComponent(getToken() ?? '')}`;
   const [text, setText] = useState('');
   const [videoFailed, setVideoFailed] = useState(false);
@@ -29,6 +29,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
   const [editingText, setEditingText] = useState(false);
   const [textLoaded, setTextLoaded] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [csvGrid, setCsvGrid] = useState(false); // byte-faithful CSV grid fallback (vs. OnlyOffice)
   const [csvText, setCsvText] = useState('');
   const mode = editorFor(item.name);
@@ -49,8 +50,9 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
     return () => clearInterval(id);
   }, [item.proxyPending, onRefreshItems]);
 
-  // F2 toggles fullscreen for any file view (editor, media, or preview); Esc exits
-  // fullscreen first, then closes the file back to the grid. Capture phase so it runs
+  // F2 toggles fullscreen for any file view (editor, media, or preview); Esc backs
+  // out one layer at a time — the actions popover first, then fullscreen, then the
+  // file itself. Capture phase so it runs
   // before other handlers. (Keys while focus is inside the cross-origin
   // OnlyOffice iframe do NOT reach this parent window — there the editor's own F2/Esc win,
   // and the on-screen Expand/Exit button is the reliable path. Esc inside our own
@@ -63,6 +65,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
       if (e.key === 'F2') {
         e.preventDefault(); setExpanded((v) => !v);
       } else if (e.key === 'Escape') {
+        if (actionsOpen) { e.preventDefault(); e.stopPropagation(); setActionsOpen(false); return; }
         const t = e.target as HTMLElement | null;
         const editable = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
         // Editable field OUTSIDE the viewer (chat box, dialogs) — its own handler owns Esc.
@@ -78,7 +81,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [expanded]);
+  }, [expanded, actionsOpen]);
 
   useEffect(() => {
     if (mode === 'text' || mode === 'structured' || mode === 'markdown' || mode === 'code') {
@@ -89,7 +92,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
 
   // A new item — or a media source that just flipped (transcode finished: pending →
   // proxy ready) — starts from a clean element: old failures and reload keys reset.
-  useEffect(() => { setVideoFailed(false); setImageFailed(false); setVideoReload(0); setImageReload(0); },
+  useEffect(() => { setVideoFailed(false); setImageFailed(false); setVideoReload(0); setImageReload(0); setActionsOpen(false); },
     [item.path, item.hasProxy, item.proxyPending]);
 
   // Re-opening a different file resets the CSV grid fallback.
@@ -101,6 +104,37 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
     catch { /* leave the OnlyOffice editor open */ }
   };
 
+  // Every right-side action lives in one ▾ popover (same affordance as the main
+  // sharing page's Create button), so the top bar leaves room for the file name.
+  const actionsMenu = actionsOpen && (
+    <>
+      <div className="ctx-backdrop" onClick={() => setActionsOpen(false)} />
+      <div className="ctx-menu viewer-actions" role="menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4 }}>
+        {!item.isDir && (
+          <a role="menuitem" className="ctx-menu-item" href={url} download={item.name} onClick={() => setActionsOpen(false)}
+            title="Download this file">
+            <span className="ctx-menu-icon"><ShapeIcon name="download" size={14} /></span>Download
+          </a>
+        )}
+        <div role="menuitem" className="ctx-menu-item" onClick={() => { setExpanded((e) => !e); setActionsOpen(false); }}>
+          <span className="ctx-menu-icon"><ShapeIcon name={expanded ? 'compress' : 'expand'} size={14} /></span>
+          {expanded ? 'Exit fullscreen' : 'Expand'}
+        </div>
+        {isCsv && !csvGrid && (
+          <div role="menuitem" className="ctx-menu-item" onClick={() => { setActionsOpen(false); void openCsvGrid(); }}
+            title="Edit as a byte-faithful grid (preserves quoting & line-endings)">
+            <span className="ctx-menu-icon"><ShapeIcon name="eye" size={14} /></span>Open as grid
+          </div>
+        )}
+        {onTrash && (
+          <div role="menuitem" className="ctx-menu-item danger" onClick={() => { setActionsOpen(false); onTrash(item.path); }}>
+            <span className="ctx-menu-icon"><ShapeIcon name="trash" size={14} /></span>Trash
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div ref={rootRef} className={expanded ? 'viewer viewer-fullscreen' : 'viewer'}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
@@ -108,22 +142,29 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <ShapeIcon name="back" size={15} /> Back
         </button>
-        <span style={{ fontWeight: 600 }}>{item.name}</span>
+        <span className="viewer-bar-name" title={item.name}>{truncatedName(item.name, item.isDir)}</span>
         <span style={{ flex: 1 }} />
-        {(item.kind === 'video' || item.kind === 'image') && <a className="btn" href={url} download={item.name}>Download original</a>}
-        <button className="btn" onClick={() => setExpanded((e) => !e)} aria-pressed={expanded}
-          title={expanded ? 'Exit fullscreen' : 'Expand to fullscreen (F2)'}>
-          {expanded ? '⤢ Exit fullscreen' : '⛶ Expand'}
-        </button>
-        {isCsv && !csvGrid && <button className="btn" onClick={() => void openCsvGrid()} title="Edit as a byte-faithful grid (preserves quoting & line-endings)">Open as grid</button>}
-        {onTrash && <button className="btn" onClick={() => onTrash(item.path)} title="Move to trash">🗑️ Trash</button>}
+        <div style={{ position: 'relative' }}>
+          <button className="btn" onClick={() => setActionsOpen((o) => !o)} aria-label="File actions" aria-expanded={actionsOpen}
+            title="File actions"
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999, padding: '6px 12px' }}>
+            <ShapeIcon name="chevronDown" size={16} />
+          </button>
+          {actionsMenu}
+        </div>
       </div>
-      {mode === 'markdown' && textLoaded && (editingText
-        ? <MarkdownEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); setEditingText(false); }} />
-        : <MarkdownViewer name={item.name} text={text} onEdit={() => setEditingText(true)} />)}
-      {mode === 'text' && textLoaded && <TextFileEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
+      {mode === 'markdown' && textLoaded && (
+        <MarkdownEditor name={item.name} initialText={text}
+          onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }}
+          onRename={onRename && (async (n) => { await onRename(item.path, n); })} />
+      )}
+      {mode === 'text' && textLoaded && (
+        <TextFileEditor name={item.name} initialText={text}
+          onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }}
+          onRename={onRename && (async (n) => { await onRename(item.path, n); })} />
+      )}
       {mode === 'structured' && textLoaded && (editingText
-        ? <TextFileEditor path={item.path} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); setEditingText(false); }} />
+        ? <TextFileEditor name={item.name} initialText={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); setEditingText(false); }} onRename={onRename && (async (n) => { await onRename(item.path, n); })} />
         : <StructuredViewer name={item.name} text={text} onEdit={() => setEditingText(true)} />)}
       {mode === 'code' && textLoaded && <CodeViewer name={item.name} path={item.path} text={text} onSave={async (c) => { await api.saveFileText(item.path, c); onSaved(); }} />}
       {item.kind === 'image' && (
@@ -136,7 +177,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
           ) : imageFailed ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
               <div style={{ fontSize: 40 }}>🖼️</div>
-              <p>Preview unavailable. Use "Download original".</p>
+              <p>Preview unavailable. Use "Download" in the file-actions menu.</p>
               <button className="btn" onClick={() => { setImageFailed(false); setImageReload((n) => n + 1); }}>Retry</button>
             </div>
           ) : (
@@ -154,7 +195,7 @@ export function FileViewer({ item, onBack, onSaved, onTrash, onRefreshItems }: {
           ) : videoFailed ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
               <div style={{ fontSize: 40 }}>🎬</div>
-              <p>Preview unavailable for this video. Use "Download original".</p>
+              <p>Preview unavailable for this video. Use "Download" in the file-actions menu.</p>
               <button className="btn" onClick={() => { setVideoFailed(false); setVideoReload((n) => n + 1); }}>Retry</button>
             </div>
           ) : (

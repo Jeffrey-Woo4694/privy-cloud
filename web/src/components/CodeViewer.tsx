@@ -75,7 +75,7 @@ export function CodeViewer({ name, path, text, onSave }: { name: string; path: s
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <div className="codeviewer-large-note">File too large for the highlighted view — editing as plain text.</div>
-        <TextFileEditor path={path} initialText={text} onSave={onSave} />
+        <TextFileEditor name={name} initialText={text} onSave={onSave} />
       </div>
     );
   }

@@ -64,9 +64,10 @@ describe('CodeViewer', () => {
     // >1 MB of source: highlighting + numbering a megabyte is too costly, so the
     // component opens the textarea directly instead of the highlighted gutters.
     const big = 'x'.repeat(1_000_001);
-    render(<CodeViewer name="huge.py" path="huge.py" text={big} onSave={vi.fn()} />);
+    const { container } = render(<CodeViewer name="huge.py" path="huge.py" text={big} onSave={vi.fn()} />);
     expect(screen.getByText(/too large for the highlighted view/i)).toBeTruthy();
-    expect(screen.getByRole('textbox')).toHaveValue(big);
+    // The head row's name field is also a textbox, so the content area goes by tag.
+    expect(container.querySelector('textarea')).toHaveValue(big);
     // No gutter/copy chrome for a file we render as plain text.
     expect(screen.queryByText(/copy/i)).toBeNull();
   });
