@@ -9,6 +9,7 @@ import { getToken, setToken, clearToken } from './auth';
 import { api } from './api';
 import { useIdleScroll } from './useIdleScroll';
 import { TaiChiIcon } from './components/icons';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 type Tab = 'hermes' | 'coding' | 'privy';
 const TABS: Array<{ key: Tab; label: string }> = [
@@ -24,6 +25,39 @@ const MOBILE_TABS: Array<{ key: Tab; label: string; icon: string }> = [
   { key: 'coding', label: 'Coding Agent', icon: '👨‍💻' },
   { key: 'privy', label: 'Shared files', icon: '📁' },
 ];
+
+// The desktop shell is frameless (decorations: false), so the title bar and its
+// window controls are drawn here as HTML. It renders only under Tauri — a browser
+// or phone page has no window to control, so the title bar is omitted there.
+const IS_TAURI = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+// A press that begins on the title bar (or the empty parts of the toolbar) drags the
+// window. We use the explicit startDragging() — Tauri gates window commands behind
+// the capabilities declared in default.json — and we bail out when the press starts
+// on an interactive control so buttons still take their click.
+function maybeStartDrag(e: React.MouseEvent) {
+  if (e.button !== 0) return; // left button only
+  const t = e.target as HTMLElement;
+  if (t.closest('button, a, input, textarea, select, [role="button"], .seg')) return;
+  if (IS_TAURI) void getCurrentWindow().startDragging().catch(() => {});
+}
+
+function TitleBar() {
+  const win = IS_TAURI ? getCurrentWindow() : null;
+  const minimize = () => void win?.minimize().catch(() => {});
+  const toggleMaximize = () => void win?.toggleMaximize().catch(() => {});
+  const close = () => void win?.close().catch(() => {});
+  return (
+    <div className="window-titlebar" onMouseDown={maybeStartDrag}>
+      <span className="window-title">Privy Cloud</span>
+      <div className="window-controls" onMouseDown={(e) => e.stopPropagation()}>
+        <button className="wc wc-yellow" aria-label="Minimize" title="Minimize" onClick={minimize}>–</button>
+        <button className="wc wc-green" aria-label="Maximize" title="Maximize" onClick={toggleMaximize}>+</button>
+        <button className="wc wc-red" aria-label="Close" title="Close" onClick={close}>×</button>
+      </div>
+    </div>
+  );
+}
 
 function Shell({ onLogout }: { onLogout(): void }) {
   // The default view is Privy Cloud (the file-sharing + Hermes chat), for every
@@ -77,7 +111,8 @@ function Shell({ onLogout }: { onLogout(): void }) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div className="tab-bar">
+      {IS_TAURI && <TitleBar />}
+      <div className="tab-bar" onMouseDown={maybeStartDrag}>
         <div className="tab-left">
           <button className="icon-btn" onClick={toggle} aria-label="toggle theme" title="Toggle theme"><TaiChiIcon /></button>
         </div>

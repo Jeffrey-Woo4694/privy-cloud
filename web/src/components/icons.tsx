@@ -8,33 +8,36 @@
 import { type Kind } from '@privy/shared';
 import type { ReactNode } from 'react';
 
+/* Grid / list / more (⋯) toolbar icons, as thin outline strokes (stroke = currentColor)
+   matching the line-icon family below — the filled squares/bars/dots read as heavy next
+   to the rest of the sharing UI. Same geometry, thinner stroke. */
 export function GridIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <rect x="1" y="1" width="6" height="6" rx="1.2" />
-      <rect x="9" y="1" width="6" height="6" rx="1.2" />
-      <rect x="1" y="9" width="6" height="6" rx="1.2" />
-      <rect x="9" y="9" width="6" height="6" rx="1.2" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.3} aria-hidden="true">
+      <rect x="1.5" y="1.5" width="5.2" height="5.2" rx="1" />
+      <rect x="9.3" y="1.5" width="5.2" height="5.2" rx="1" />
+      <rect x="1.5" y="9.3" width="5.2" height="5.2" rx="1" />
+      <rect x="9.3" y="9.3" width="5.2" height="5.2" rx="1" />
     </svg>
   );
 }
 
 export function DotsIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <circle cx="3" cy="8" r="1.6" />
-      <circle cx="8" cy="8" r="1.6" />
-      <circle cx="13" cy="8" r="1.6" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.3} aria-hidden="true">
+      <circle cx="3" cy="8" r="1.3" />
+      <circle cx="8" cy="8" r="1.3" />
+      <circle cx="13" cy="8" r="1.3" />
     </svg>
   );
 }
 
 export function ListIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <rect x="1" y="2.5" width="14" height="2.6" rx="1.2" />
-      <rect x="1" y="7" width="14" height="2.6" rx="1.2" />
-      <rect x="1" y="11.5" width="14" height="2.6" rx="1.2" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" aria-hidden="true">
+      <line x1="2" y1="3.4" x2="14" y2="3.4" />
+      <line x1="2" y1="8" x2="14" y2="8" />
+      <line x1="2" y1="12.6" x2="14" y2="12.6" />
     </svg>
   );
 }
