@@ -1,5 +1,5 @@
 {
-  "name": "@privy/desktop", "private": true, "version": "0.0.0", "type": "module",
+  "name": "@privy/desktop", "private": true, "version": "1.0.0", "type": "module",
   "scripts": { "tauri": "tauri" },
   "dependencies": { "@tauri-apps/api": "^2.0.0" },
   "devDependencies": { "@tauri-apps/cli": "^2.0.0" }
