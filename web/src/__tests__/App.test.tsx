@@ -24,11 +24,25 @@ vi.mock('../api', () => ({
     proxyUrl: (p: string) => p,
     fileUrl: (p: string) => p,
     setRoot: vi.fn().mockResolvedValue('/'),
+    officeEngine: vi.fn().mockResolvedValue({ enabled: false }),
   },
 }));
 
+import { api } from '../api';
+import { __resetOfficeWarmForTests } from '../officeWarm';
+
 describe('App', () => {
   beforeEach(() => localStorage.setItem('privy-token', 't'));
+
+  // The editor loader is fetched at launch rather than on first open, so opening a
+  // document doesn't pay for the engine handshake on the spot.
+  it('warms the office engine once the session is authenticated', async () => {
+    __resetOfficeWarmForTests();
+    const officeEngine = api.officeEngine as unknown as ReturnType<typeof vi.fn>;
+    officeEngine.mockClear();
+    render(<App />);
+    await waitFor(() => expect(officeEngine).toHaveBeenCalled());
+  });
 
   it('boots into the Privy Cloud tab', async () => {
     render(<App />);

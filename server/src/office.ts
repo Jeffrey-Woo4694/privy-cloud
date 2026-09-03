@@ -64,6 +64,12 @@ export class OfficeProvider {
     return this.engineUrl !== '';
   }
 
+  /** The engine origin on its own, for warming the editor loader before a document
+   *  is chosen. Carries no token and takes no lock — unlike createSession. */
+  getEngineUrl(): string {
+    return this.engineUrl;
+  }
+
   /** A stable per-document cache key for the engine, keyed on content so an edit
    *  makes a new key (forcing the engine to reload fresh) without every open changing it. */
   private docKey(rel: string): string {

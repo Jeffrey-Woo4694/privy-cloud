@@ -311,8 +311,15 @@ button { font: inherit; cursor: pointer; }
    button never changes label or size (which used to make the row jump on save).
    The slot keeps a fixed width; the text inside just fades in and out. */
 .save-ghost { color: var(--muted); font-size: 12px; min-width: 64px; text-align: right; white-space: nowrap; flex-shrink: 0; }
-/* Markdown's single Edit/Show button: one fixed-size control, only the label flips. */
-.md-toggle { min-width: 62px; flex-shrink: 0; text-align: center; }
+/* Markdown's single Edit/Show button: one fixed-size control, only the label flips.
+   The width is fixed, not a floor: "Show" is wider than "Edit", and under a 62px
+   min-width it overflowed by ~3.5px, so every toggle nudged the row. */
+.md-toggle { width: 74px; flex-shrink: 0; text-align: center; }
+/* The editor head row's buttons match the sharing page's top-bar controls
+   (.path-nav-btn / .trail-btn), which stand an explicit 32px. Left to .btn's
+   padding alone these came out ~35px, which read as heavy beside them. Scoped to
+   this row so the app's other .btn call sites keep their own size. */
+.editor-title .btn { height: 32px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; }
 .editor-error { color: var(--danger); font-size: 12px; margin-bottom: 8px; }
 .editor textarea { flex: 1; background: var(--inputbg); border: none; border-radius: 12px; color: var(--text); font-family: ui-monospace, Menlo, monospace; font-size: 14px; padding: 12px; resize: none; outline: none; }
 /* CodeMirror mount (CodeEditor): constrain the whole .cm-theme > .cm-editor >

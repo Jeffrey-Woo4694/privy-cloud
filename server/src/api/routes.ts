@@ -201,6 +201,15 @@ export async function registerRoutes(app: FastifyInstance, ctx: ApiContext): Pro
     }
   });
 
+  // The engine origin alone, so the web app can warm the editor loader at launch.
+  // Deliberately not /api/office/session: that mints a one-use token and locks a
+  // document, which would be wrong for a file the user has not opened.
+  app.get('/api/office/engine', async () => {
+    const office = ctx.office;
+    if (!office || !office.isConfigured()) return { enabled: false };
+    return { enabled: true, engineUrl: office.getEngineUrl() };
+  });
+
   app.delete('/api/office/session', async (req, reply) => {
     const office = ctx.office;
     const token = ((req.body ?? {}) as { token?: string; }).token ?? ((req.query as { token?: string }).token ?? '');

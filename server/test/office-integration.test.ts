@@ -78,4 +78,44 @@ describe('office integration (stub engine)', () => {
     expect(s2.json().token).not.toBe(tok1);
     await app.close();
   });
+
+  // The web app warms the engine's loader at launch, which needs the engine origin
+  // before any document is chosen. Reusing /api/office/session for that would mint a
+  // token and take a lock on a file nobody opened, so this route reports the origin
+  // and nothing else.
+  it('reports the engine origin without minting a session or locking a file', async () => {
+    process.env.HERMES_ENABLED = '0';
+    root = mkdtempSync(join(tmpdir(), 'privy-engine-'));
+    await initRootStructure(root);
+    mkdirSync(join(root, 'Privy Cloud', 'Documents'), { recursive: true });
+    writeFileSync(join(root, 'Privy Cloud', 'Documents', 'w.docx'), 'x');
+    const app = await buildApp({ root, token: 'test-token', officeEngineUrl: 'https://doc.example' });
+    const AUTH = { authorization: 'Bearer test-token' };
+
+    const res = await app.inject({ method: 'GET', url: '/api/office/engine', headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ enabled: true, engineUrl: 'https://doc.example' });
+    expect(res.json().token).toBeUndefined();
+
+    // Nothing was locked: a real open of any document still succeeds first time.
+    const sess = await app.inject({
+      method: 'GET', headers: AUTH,
+      url: '/api/office/session?path=' + encodeURIComponent('Documents/w.docx'),
+    });
+    expect(sess.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('reports the engine as disabled when no engine is configured', async () => {
+    process.env.HERMES_ENABLED = '0';
+    root = mkdtempSync(join(tmpdir(), 'privy-noengine-'));
+    await initRootStructure(root);
+    const app = await buildApp({ root, token: 'test-token' });
+    const res = await app.inject({
+      method: 'GET', url: '/api/office/engine',
+      headers: { authorization: 'Bearer test-token' },
+    });
+    expect(res.json()).toEqual({ enabled: false });
+    await app.close();
+  });
 });

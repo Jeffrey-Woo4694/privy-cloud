@@ -7,6 +7,7 @@ import { CodingAgentTab } from './pages/CodingAgentTab';
 import { PrivyCloudTab } from './pages/PrivyCloudTab';
 import { getToken, setToken, clearToken } from './auth';
 import { api } from './api';
+import { warmOfficeEngine } from './officeWarm';
 import { useIdleScroll } from './useIdleScroll';
 import { TaiChiIcon } from './components/icons';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -149,6 +150,14 @@ export function App() {
       .then(() => { if (!cancelled) setAuth('authenticated'); })
       .catch(() => { clearToken(); if (!cancelled) setAuth('unauthenticated'); });
     return () => { cancelled = true; };
+  }, [auth]);
+
+  // Warm the document engine as soon as we have a session, so the first document
+  // open doesn't pay for the engine handshake and loader fetch. Best-effort and
+  // self-deduping; it never blocks or fails the app.
+  useEffect(() => {
+    if (auth !== 'authenticated') return;
+    void warmOfficeEngine();
   }, [auth]);
 
   const handleLogin = async (token: string) => {

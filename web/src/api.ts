@@ -101,4 +101,6 @@ export const api = {
     req(`/api/office/session?path=${encodeURIComponent(path)}${force ? '&force=1' : ''}`),
   endOfficeSession: (token: string): Promise<{ ok: boolean }> =>
     req('/api/office/session', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }), keepalive: true }),
+  // The engine origin only — no token, no lock. For warming the editor loader at launch.
+  officeEngine: (): Promise<{ enabled: boolean; engineUrl?: string }> => req('/api/office/engine'),
 };
